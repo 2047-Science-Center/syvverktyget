@@ -159,7 +159,7 @@ export const DECKS: Record<ValvId, Role[]> = {
       realJob: 'Processoperatör, stål-/verkstadsindustri',
       blurb: 'Kör och vaktar en industriprocess dygnet runt — läser av, finjusterar, griper in när något larmar.',
       image: cardImg('driften', 'processoperatoren'),
-      clip: { id: 'clip_silent_process', brief: 'Vox pop / silent process — en skiftgång i ett kontrollrum', src: clipSrc('clip_silent_process') },
+      clip: { id: 'clip1', brief: 'Vox pop / silent process — en skiftgång i ett kontrollrum', src: clipSrc('clip1') },
     },
     {
       id: 'faltteknikern',
@@ -167,7 +167,7 @@ export const DECKS: Record<ValvId, Role[]> = {
       realJob: 'Underhålls- och servicetekniker',
       blurb: 'Lagar det som gått sönder ute i fält — reser, löser, får igång. Ingen dag är den andra lik.',
       image: cardImg('driften', 'faltteknikern'),
-      clip: { id: 'clip_faltbesok', brief: 'Talking head — "en dag på vägen" med en servicetekniker', src: clipSrc('clip_faltbesok') },
+      clip: { id: 'clip2', brief: 'Talking head — "en dag på vägen" med en servicetekniker', src: clipSrc('clip2') },
     },
     {
       id: 'faltmedikern',
@@ -175,7 +175,7 @@ export const DECKS: Record<ValvId, Role[]> = {
       realJob: 'Sjuksköterska / undersköterska',
       blurb: 'Tar hand om människor när det gäller — snabba beslut, trygg hand, aldrig ensam i laget.',
       image: cardImg('driften', 'faltmedikern'),
-      clip: { id: 'clip_vard', brief: 'Vox pop — vårdpersonal om "det ingen ser"', src: clipSrc('clip_vard') },
+      clip: { id: 'clip3', brief: 'Vox pop — vårdpersonal om "det ingen ser"', src: clipSrc('clip3') },
     },
     {
       id: 'harbargesvarden',
@@ -183,7 +183,7 @@ export const DECKS: Record<ValvId, Role[]> = {
       realJob: 'Kock / hotell- och restaurangpersonal',
       blurb: 'Får ett rum fullt av gäster att må bra — tempo, timing och allt på plats samtidigt.',
       image: cardImg('driften', 'harbargesvarden'),
-      clip: { id: 'clip_kok', brief: 'Silent process — ett kök under lunchrush', src: clipSrc('clip_kok') },
+      clip: { id: 'clip4', brief: 'Silent process — ett kök under lunchrush', src: clipSrc('clip4') },
     },
     {
       id: 'markforvaltaren',
@@ -191,7 +191,7 @@ export const DECKS: Record<ValvId, Role[]> = {
       realJob: 'Lantbrukare / djurskötare',
       blurb: 'Odlar valvets mat i stora odlingstält — sköter grödor och system så basen är självförsörjande.',
       image: cardImg('driften', 'markforvaltaren'),
-      clip: { id: 'clip_lantbruk', brief: 'Talking head — morgon bland odlingarna', src: clipSrc('clip_lantbruk') },
+      clip: { id: 'clip1', brief: 'Talking head — morgon bland odlingarna', src: clipSrc('clip1') },
     },
     {
       id: 'vattenmastaren',
@@ -199,7 +199,7 @@ export const DECKS: Record<ValvId, Role[]> = {
       realJob: 'VA-/processtekniker (vattenrening)',
       blurb: 'Håller valvets vatten rent och i kretslopp — renar, återvinner, övervakar att inget går till spillo.',
       image: cardImg('driften', 'vattenmastaren'),
-      clip: { id: 'clip_vatten', brief: 'Silent process — vattenrening/återvinning', src: clipSrc('clip_vatten') },
+      clip: { id: 'clip2', brief: 'Silent process — vattenrening/återvinning', src: clipSrc('clip2') },
     },
   ],
   diplomatkaren: [],
