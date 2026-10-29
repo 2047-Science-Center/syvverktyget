@@ -1,2 +1,4 @@
 # Maskinspecifik konfig (port, broker-url, skärm, ljud-sink) — checkas inte in.
 kiosk.env
+# Bygg-parametrar som install.sh skriver (mode/broker/station/port).
+build.env

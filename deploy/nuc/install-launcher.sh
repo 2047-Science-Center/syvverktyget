@@ -43,11 +43,12 @@ install_one() {
 echo "Installerar ikoner ..."
 install_one syvverktyget.desktop          start.sh    syvverktyget.desktop
 install_one syvverktyget-restart.desktop  restart.sh  syvverktyget-restart.desktop
+install_one syvverktyget-update.desktop   update.sh   syvverktyget-update.desktop
 
 update-desktop-database "$apps" 2>/dev/null || true
 
 echo
-echo "Klart. På skrivbordet finns nu:  Starta SYV-verktyget  |  Starta om SYV-verktyget"
+echo "Klart. På skrivbordet finns nu:  Starta SYV-verktyget  |  Starta om SYV-verktyget  |  Uppdatera SYV-verktyget"
 echo "Avsluta appen med dess ✕-knapp, eller 'Starta om SYV-verktyget'."
 if [ "$problems" -gt 0 ]; then
   echo

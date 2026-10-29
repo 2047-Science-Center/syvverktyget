@@ -79,6 +79,16 @@ say "Bygger appen (VITE_MODE=$MODE)"
   npm run build )
 [ -f "$REPO/dist/index.html" ] || { echo "FEL: dist/index.html saknas efter bygget." >&2; exit 1; }
 
+# Spara bygg-parametrarna (maskinspecifikt, gitignorerat) så update.sh kan bygga
+# om med SAMMA mode/broker/station/port utan att du behöver minnas flaggorna.
+cat > "$HERE/build.env" <<EOF
+# Skrivet av install.sh — bygg-parametrar för update.sh. Checkas inte in.
+MODE=$MODE
+BROKER=$BROKER
+STATION=$STATION
+PORT=$PORT
+EOF
+
 # --- 2) Server som systemd-tjänst (system, kräver sudo) ---
 say "Installerar systemd-tjänst: syvverktyget-server (port $PORT, 127.0.0.1)"
 tmp="$(mktemp)"
