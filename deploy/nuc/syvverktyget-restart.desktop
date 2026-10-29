@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Starta om SYV-verktyget
+Comment=Stäng och starta om kiosken (datorn startas inte om)
+# @EXEC@ ersätts av install-launcher.sh med rätt sökväg till restart.sh.
+Exec=@EXEC@
+Icon=view-refresh
+Terminal=false
+Categories=Game;
+StartupNotify=false

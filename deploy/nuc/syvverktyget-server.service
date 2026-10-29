@@ -1,0 +1,24 @@
+# systemd-tjänst: statisk filserver för SYV-verktygets byggda dist/ (serve.mjs).
+# Installeras av install.sh (platshållarna @...@ ersätts där). System-tjänst så
+# stationen reser sig själv efter strömavbrott.
+#
+# PORTSÄKERT: @PORT@ sätts av install.sh (--port), default en ovanlig port
+# (8791) — ALDRIG 80/8080/3000/5173. Binder 127.0.0.1 → inget på nätet.
+[Unit]
+Description=SYV-verktyget — statisk server (X&Y-finalen)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@REPO@
+Environment=PORT=@PORT@
+Environment=HOST=127.0.0.1
+Environment=NODE_ENV=production
+ExecStart=@NODE@ @REPO@/deploy/nuc/serve.mjs
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+# systemd USER-tjänst: startar kiosk-fönstret i den grafiska sessionen.
+# Installeras av install.sh till ~/.config/systemd/user/ (@REPO@ ersätts där).
+# Kräver att NUC:en loggar in automatiskt till en grafisk session (se INSTALL-NUC.md).
+[Unit]
+Description=SYV-verktyget — kiosk (en skärm)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=@REPO@/deploy/nuc/kiosk.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

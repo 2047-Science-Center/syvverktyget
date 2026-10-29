@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Starta SYV-verktyget
+Comment=Starta X&Y-finalen (kiosk)
+# @EXEC@ ersätts av install-launcher.sh med rätt sökväg till start.sh.
+Exec=@EXEC@
+Icon=input-gaming
+Terminal=false
+Categories=Game;
+StartupNotify=false

@@ -1,0 +1,25 @@
+{
+  "name": "syvverktyget",
+  "version": "0.1.0",
+  "private": true,
+  "description": "X&Y-finalen / SYV-verktyget (station) — svep-kortlek per valv + reveal mot näringslivet, byggd i X&Y-riggens station-mönster. Placeholder-flöde (media läggs till senare). 2047 Science Center.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "mqtt": "^5.16.1",
+    "pinia": "^2.2.6",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vue-tsc": "^2.1.10"
+  }
+}
