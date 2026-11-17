@@ -1,37 +1,30 @@
 /**
- * Store (Pinia) för SYV-verktyget. Äger faserna och all röstdata.
+ * Store (Pinia) för SYV-verktyget v2. Äger faserna och all röstdata.
  *
- * Fasflöde (BARA den här appen — incheckning + sortering till valv sker
- * uppströms och är klart när appen startar):
+ *   card → swipe ×8 → overview (så valde ni + barriär)
+ *        → reality{ clip → revote } ×8 → doors
  *
- *   attract → swipe → barrier → reveal{result → clip → revote} → summary
+ * Röster: 'ja' = ÖPPEN dörr (höger läsare), 'nej' = STÄNGD dörr (vänster
+ * läsare). Samma värden som RFID-sömmen (`rfidja`/`rfidnej`), så adaptrarna
+ * rörs inte.
  *
- * Två skärmar vid stationen. I swipe-läget är skärmarna OBEROENDE: de 3 vid en
- * skärm bippar ja/nej (RFID ja/nej-läsare, eller klick/tangent i pilot) och
- * MAJORITETEN av de 3 avgör kortet live. VARJE individs röst sparas (per
- * voterId: UID i drift, syntetiskt i klickläge). Vid barriären väntar den
- * snabbare 3-gruppen in den andra. I reveal är allt synkat och siffrorna
- * aggregeras över hela gruppen (6).
+ * Två skärmar vid stationen. I svepet är skärmarna OBEROENDE: de 3 vid en skärm
+ * bippar och MAJORITETEN av de 3 stämplar kortet. VARJE individs röst sparas
+ * (per voterId: UID i drift, syntetiskt i klickläge). I "så valde ni" väntar
+ * den snabbare skärmen in den andra (barriären). Verkligheten är gemensam och
+ * räknas över hela gruppen (6).
  *
  * PILOT/solo: ett fönster driver flödet; den andra skärmens 3 röster simuleras
- * (platshållare). Skarp två-NUC-synk byggs senare (config.pilotSync).
+ * deterministiskt. Skarp två-NUC-synk byggs senare (config.pilotSync).
  */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
-import {
-  config,
-  DECKS,
-  VALV,
-  FULL_GROUP,
-  PILOT_VALV,
-  PILOT_MEMBERS,
-  type Role,
-  type ValvId,
-} from './config'
+import { config, DECKS, VALV, FULL_GROUP, PILOT_VALV, PILOT_MEMBERS, type Role, type ValvId } from './config'
 
-export type Phase = 'attract' | 'swipe' | 'barrier' | 'reveal' | 'summary'
-export type RevealStep = 'result' | 'clip' | 'revote'
+export type Phase = 'card' | 'swipe' | 'overview' | 'reality' | 'doors'
+export type RealityStep = 'clip' | 'revote'
+/** 'ja' = öppen dörr, 'nej' = stängd dörr. */
 export type Vote = 'ja' | 'nej'
 
 /** En individs röst på ett kort. voterId = UID (drift) eller syntetiskt (klick). */
@@ -46,7 +39,7 @@ interface CardBallots {
   B: Ballot[]
 }
 
-/** Deterministiska platshållar-röster för den andra skärmen (stabil per kort). */
+/** Deterministiska röster för den andra skärmen (stabil per kort). */
 function simBallots(seed: string): Ballot[] {
   let h = 0
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) & 0xffff
@@ -58,203 +51,246 @@ function simBallots(seed: string): Ballot[] {
   return out
 }
 
+/** Omröstningen på skärm B: utgår från svepet, och var tredje röst (ungefär) öppnar sig. */
+function simRevote(seed: string, before: Ballot[]): Ballot[] {
+  const extra = simBallots(seed)
+  return before.map((b, i) => ({
+    voterId: b.voterId,
+    vote: b.vote === 'nej' && extra[i].vote === 'ja' && i % 2 === 0 ? 'ja' : b.vote,
+  }))
+}
+
 function majority(ballots: Ballot[]): Vote {
   const ja = ballots.filter((b) => b.vote === 'ja').length
   return ja * 2 >= ballots.length ? 'ja' : 'nej'
 }
 
 export const useStore = defineStore('syvverktyget', () => {
-  const phase = ref<Phase>('attract')
+  const phase = ref<Phase>('card')
   const valvId = ref<ValvId>(PILOT_VALV)
   const members = ref<string[]>([...PILOT_MEMBERS])
 
   const deck = computed<Role[]>(() => DECKS[valvId.value])
   const valv = computed(() => VALV[valvId.value])
 
-  // --- Swipe ---
-  const cardIndex = ref(0)
-  const currentCard = computed<Role | undefined>(() => deck.value[cardIndex.value])
-  /** Denna skärms ballots på nuvarande kort (0..groupSize distinkta röstare). */
-  const pendingA = ref<Ballot[]>([])
-  /** För VotePanel: bara rösterna (panelen räknar längd). */
-  const pending = computed<Vote[]>(() => pendingA.value.map((b) => b.vote))
-  /** Alla swipe-röster, per kort-id. */
-  const swipeVotes = ref<Record<string, CardBallots>>({})
-  /** Live-utfall per kort (majoritet av de 3 vid denna skärm). */
-  const swipeOutcome = ref<Record<string, Vote>>({})
-  let resolving = false
+  /** Alla väntande timers, så att reset aldrig får en spöktimer. */
+  const timers = new Set<ReturnType<typeof setTimeout>>()
+  function later(ms: number, fn: () => void): void {
+    const t = setTimeout(() => {
+      timers.delete(t)
+      fn()
+    }, ms)
+    timers.add(t)
+  }
 
-  // --- Barriär ---
+  // --- Svep ---
+  const swipeIndex = ref(0)
+  const swipeCard = computed<Role | undefined>(() => deck.value[swipeIndex.value])
+  const swipePending = ref<Ballot[]>([])
+  const swipeVotes = ref<Record<string, CardBallots>>({})
+  /** Stämpeln som ligger på kortet just nu (null = inte avgjort än). */
+  const swipeStamp = ref<Vote | null>(null)
+
+  // --- Så valde ni / barriär ---
   const otherScreenReady = ref(false)
 
-  // --- Reveal ---
-  const revealIndex = ref(0)
-  const revealStep = ref<RevealStep>('result')
-  const revealCard = computed<Role | undefined>(() => deck.value[revealIndex.value])
-  const revotePendingA = ref<Ballot[]>([])
-  const revotePending = computed<Vote[]>(() => revotePendingA.value.map((b) => b.vote))
-  /** Omröstning efter klippet, per kort-id. */
+  // --- Verkligheten ---
+  const realityIndex = ref(0)
+  const realityStep = ref<RealityStep>('clip')
+  const realityCard = computed<Role | undefined>(() => deck.value[realityIndex.value])
+  const revotePending = ref<Ballot[]>([])
   const revoteVotes = ref<Record<string, CardBallots>>({})
-  let revoteResolving = false
-
-  const otherScreenLabel = computed(() => (config.screens > 1 ? 'Skärm B' : ''))
+  /** Hur många dörrar som rörde sig på nuvarande roll (null = inte klart än). */
+  const revoteMoved = ref<number | null>(null)
 
   /** Syntetiskt voterId för klick/tangent (anonym person nr N på kortet). */
   function localVoterId(cardId: string, list: Ballot[]): string {
     return `local:${cardId}:${list.length + 1}`
   }
 
-  /** Lägg/uppdatera en ballot i en lista. Returnerar ny lista (immutabelt). */
+  /** Lägg/uppdatera en ballot. Samma UID igen före upplösning = ändrat sig. */
   function applyBallot(list: Ballot[], voterId: string | undefined, vote: Vote, cardId: string): Ballot[] | null {
     const id = voterId ? `uid:${voterId}` : localVoterId(cardId, list)
-    const existing = list.find((b) => b.voterId === id)
-    if (existing) {
-      // Samma band bippade igen före upplösning → ändrat sig.
-      return list.map((b) => (b.voterId === id ? { ...b, vote } : b))
-    }
+    if (list.some((b) => b.voterId === id)) return list.map((b) => (b.voterId === id ? { ...b, vote } : b))
     if (list.length >= config.groupSize) return null
     return [...list, { voterId: id, vote }]
   }
 
   // ---------- Övergångar ----------
   function begin(): void {
+    clearTimers()
     phase.value = 'swipe'
-    cardIndex.value = 0
-    pendingA.value = []
+    swipeIndex.value = 0
+    swipePending.value = []
+    swipeStamp.value = null
   }
 
-  /** En person vid denna skärm bippar sin röst på nuvarande kort. */
-  function castSwipe(vote: Vote, voterId?: string): void {
-    if (phase.value !== 'swipe' || resolving) return
-    const card = currentCard.value
-    if (!card) return
-    const next = applyBallot(pendingA.value, voterId, vote, card.id)
-    if (!next) return
-    pendingA.value = next
-    if (next.length >= config.groupSize) resolveCard()
+  function castSwipe(vote: Vote, voterId?: string): boolean {
+    const card = swipeCard.value
+    if (phase.value !== 'swipe' || swipeStamp.value || !card) return false
+    const next = applyBallot(swipePending.value, voterId, vote, card.id)
+    if (!next) return false
+    swipePending.value = next
+    if (next.length >= config.groupSize) resolveSwipe(card)
+    return true
   }
 
-  function resolveCard(): void {
-    const card = currentCard.value
-    if (!card) return
-    resolving = true
-    const A = [...pendingA.value]
-    const B = simBallots(`swipe:${card.id}`)
-    swipeVotes.value[card.id] = { A, B }
-    swipeOutcome.value[card.id] = majority(A)
-    setTimeout(() => {
-      pendingA.value = []
-      resolving = false
-      if (cardIndex.value < deck.value.length - 1) {
-        cardIndex.value += 1
-      } else {
-        phase.value = 'barrier'
-      }
-    }, 800)
+  function resolveSwipe(card: Role): void {
+    const A = [...swipePending.value]
+    swipeVotes.value[card.id] = { A, B: simBallots(`swipe:${card.id}`) }
+    swipeStamp.value = majority(A)
+    later(config.timing.stampHoldMs, () => {
+      swipePending.value = []
+      swipeStamp.value = null
+      if (swipeIndex.value < deck.value.length - 1) swipeIndex.value += 1
+      else enterOverview()
+    })
   }
 
-  /** Simulerar/speglar att den andra skärmens 3-grupp blivit klar. */
-  function markOtherReady(): void {
+  function enterOverview(): void {
+    phase.value = 'overview'
+    otherScreenReady.value = false
+    if (config.pilotSync === 'solo') later(config.timing.simOtherScreenMs, () => (otherScreenReady.value = true))
+  }
+
+  function startReality(): void {
+    clearTimers()
     otherScreenReady.value = true
+    phase.value = 'reality'
+    realityIndex.value = 0
+    realityStep.value = 'clip'
+    revotePending.value = []
+    revoteMoved.value = null
   }
 
-  function startReveal(): void {
-    phase.value = 'reveal'
-    revealIndex.value = 0
-    revealStep.value = 'result'
-    revotePendingA.value = []
+  /** Klippet har spelat klart (eller hoppats över) → rösta om. */
+  function clipEnded(): void {
+    if (phase.value !== 'reality' || realityStep.value !== 'clip') return
+    realityStep.value = 'revote'
+    revotePending.value = []
+    revoteMoved.value = null
   }
 
-  /** Från resultat-vyn vidare till klippet. */
-  function revealPlayClip(): void {
-    if (revealStep.value === 'result') revealStep.value = 'clip'
+  function castRevote(vote: Vote, voterId?: string): boolean {
+    const card = realityCard.value
+    if (phase.value !== 'reality' || realityStep.value !== 'revote' || revoteMoved.value !== null || !card) return false
+    const next = applyBallot(revotePending.value, voterId, vote, card.id)
+    if (!next) return false
+    revotePending.value = next
+    if (next.length >= config.groupSize) resolveRevote(card)
+    return true
   }
 
-  /** Klippet har spelat klart → omröstning. */
-  function revealClipEnded(): void {
-    if (revealStep.value === 'clip') {
-      revealStep.value = 'revote'
-      revotePendingA.value = []
-    }
-  }
-
-  /** En person röstar om efter klippet. */
-  function castRevote(vote: Vote, voterId?: string): void {
-    if (revealStep.value !== 'revote' || revoteResolving) return
-    const card = revealCard.value
-    if (!card) return
-    const next = applyBallot(revotePendingA.value, voterId, vote, card.id)
-    if (!next) return
-    revotePendingA.value = next
-    if (next.length >= config.groupSize) resolveRevote()
-  }
-
-  function resolveRevote(): void {
-    const card = revealCard.value
-    if (!card) return
-    revoteResolving = true
+  function resolveRevote(card: Role): void {
+    const before = swipeVotes.value[card.id]
     revoteVotes.value[card.id] = {
-      A: [...revotePendingA.value],
-      B: simBallots(`revote:${card.id}`),
+      A: [...revotePending.value],
+      B: simRevote(`revote:${card.id}`, before?.B ?? simBallots(`swipe:${card.id}`)),
     }
-    setTimeout(() => {
-      revotePendingA.value = []
-      revoteResolving = false
-      if (revealIndex.value < deck.value.length - 1) {
-        revealIndex.value += 1
-        revealStep.value = 'result'
+    revoteMoved.value = revoteOpen(card.id) - swipeOpen(card.id)
+    later(config.timing.revoteHoldMs, () => {
+      revotePending.value = []
+      revoteMoved.value = null
+      if (realityIndex.value < deck.value.length - 1) {
+        realityIndex.value += 1
+        realityStep.value = 'clip'
       } else {
-        phase.value = 'summary'
+        phase.value = 'doors'
       }
-    }, 800)
+    })
+  }
+
+  /**
+   * En röst från en läsare (RFID-bip, klick eller tangent). Returnerar true om
+   * den räknades. På kortet och i "så valde ni" betyder vilken bip som helst
+   * "vi är redo", så att flödet går att driva med bara banden.
+   */
+  function cast(vote: Vote, voterId?: string): boolean {
+    switch (phase.value) {
+      case 'card':
+        begin()
+        return true
+      case 'swipe':
+        return castSwipe(vote, voterId)
+      case 'overview':
+        if (!otherScreenReady.value) return false
+        startReality()
+        return true
+      case 'reality':
+        return realityStep.value === 'revote' ? castRevote(vote, voterId) : false
+      default:
+        return false
+    }
+  }
+
+  /** Enter/mellanslag/facilitatorn: gå vidare där det finns något att gå vidare till. */
+  function advance(): void {
+    if (phase.value === 'card') begin()
+    else if (phase.value === 'overview') startReality()
+    else if (phase.value === 'reality' && realityStep.value === 'clip') clipEnded()
   }
 
   // ---------- Aggregat (hela gruppen, 6) ----------
-  function jaCount(map: Record<string, CardBallots>, cardId: string): number {
+  function ballots(map: Record<string, CardBallots>, cardId: string): Ballot[] {
     const v = map[cardId]
-    if (!v) return 0
-    return [...v.A, ...v.B].filter((b) => b.vote === 'ja').length
+    return v ? [...v.A, ...v.B] : []
+  }
+  /** Gruppens sex dörrar i svepet (skärm A först). */
+  function swipeDoors(cardId: string): Vote[] {
+    return ballots(swipeVotes.value, cardId).map((b) => b.vote)
+  }
+  function revoteDoors(cardId: string): Vote[] {
+    return ballots(revoteVotes.value, cardId).map((b) => b.vote)
+  }
+  function swipeOpen(cardId: string): number {
+    return swipeDoors(cardId).filter((v) => v === 'ja').length
+  }
+  function revoteOpen(cardId: string): number {
+    return revoteDoors(cardId).filter((v) => v === 'ja').length
+  }
+  /** Skärm A:s stämpel per kort (majoriteten av de tre). */
+  function swipeOutcome(cardId: string): Vote | null {
+    const v = swipeVotes.value[cardId]
+    return v ? majority(v.A) : null
   }
 
-  function swipeJa(cardId: string): number {
-    return jaCount(swipeVotes.value, cardId)
-  }
-  function revoteJa(cardId: string): number {
-    return jaCount(revoteVotes.value, cardId)
-  }
-  /** Sammanställning: en rad per roll, före → efter. */
+  /** Dörrarna: en rad per roll, före → efter. */
   const journey = computed(() =>
-    deck.value.map((role) => ({
-      role,
-      before: swipeJa(role.id),
-      after: revoteVotes.value[role.id] ? revoteJa(role.id) : null,
-      total: FULL_GROUP,
-    })),
+    deck.value.map((role) => {
+      const before = swipeOpen(role.id)
+      const after = revoteVotes.value[role.id] ? revoteOpen(role.id) : before
+      return { role, before, after, delta: after - before, total: FULL_GROUP }
+    }),
   )
+  const openedTotal = computed(() => journey.value.reduce((s, r) => s + Math.max(0, r.delta), 0))
 
-  /** Sätt valv (från start-gränssnittet / ?valv=). Rensar pågående lek. */
+  // ---------- Start-gränssnitt ----------
   function setValv(id: ValvId): void {
     if (!(id in VALV)) return
     valvId.value = id
   }
-  /** Sätt namn på de 3 vid skärmen (från start-gränssnittet / ?members=). */
   function setMembers(names: string[]): void {
     if (names.length) members.value = names
   }
 
+  function clearTimers(): void {
+    for (const t of timers) clearTimeout(t)
+    timers.clear()
+  }
+
   function reset(): void {
-    phase.value = 'attract'
-    cardIndex.value = 0
-    pendingA.value = []
+    clearTimers()
+    phase.value = 'card'
+    swipeIndex.value = 0
+    swipePending.value = []
     swipeVotes.value = {}
-    swipeOutcome.value = {}
+    swipeStamp.value = null
     otherScreenReady.value = false
-    revealIndex.value = 0
-    revealStep.value = 'result'
-    revotePendingA.value = []
+    realityIndex.value = 0
+    realityStep.value = 'clip'
+    revotePending.value = []
     revoteVotes.value = {}
-    resolving = false
-    revoteResolving = false
+    revoteMoved.value = null
   }
 
   return {
@@ -263,35 +299,36 @@ export const useStore = defineStore('syvverktyget', () => {
     valv,
     members,
     deck,
-    // swipe
-    cardIndex,
-    currentCard,
-    pending,
-    pendingA,
-    swipeOutcome,
+    // svep
+    swipeIndex,
+    swipeCard,
+    swipePending,
+    swipeStamp,
     begin,
-    castSwipe,
-    // barrier
+    // så valde ni
     otherScreenReady,
-    otherScreenLabel,
-    markOtherReady,
-    startReveal,
-    // reveal
-    revealIndex,
-    revealStep,
-    revealCard,
+    startReality,
+    // verkligheten
+    realityIndex,
+    realityStep,
+    realityCard,
     revotePending,
-    revealPlayClip,
-    revealClipEnded,
-    castRevote,
+    revoteMoved,
+    clipEnded,
+    // input
+    cast,
+    advance,
     // aggregat
-    swipeJa,
-    revoteJa,
+    swipeDoors,
+    revoteDoors,
+    swipeOpen,
+    revoteOpen,
+    swipeOutcome,
     journey,
+    openedTotal,
     // start-gränssnitt
     setValv,
     setMembers,
-    // övrigt
     reset,
     FULL_GROUP,
   }

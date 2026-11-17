@@ -17,24 +17,26 @@ function toggleMute(): void {
 }
 
 const phaseLabel: Record<string, string> = {
-  attract: 'ATTRACT',
-  swipe: 'SWIPE',
-  barrier: 'BARRIÄR',
-  reveal: 'REVEAL',
-  summary: 'SAMMANSTÄLLNING',
+  card: 'KORTET',
+  swipe: 'SVEP',
+  overview: 'SÅ VALDE NI',
+  reality: 'VERKLIGHETEN',
+  doors: 'DÖRRARNA',
 }
 </script>
 
 <template>
   <div class="fac mono">
     <span class="fac__tag">PILOT · {{ config.pilotSync }} · SKÄRM {{ SCREEN_ID }}</span>
-    <span class="fac__phase">{{ phaseLabel[store.phase] }}</span>
+    <span class="fac__phase">{{ phaseLabel[store.phase] }}<template v-if="store.phase === 'reality'"> · {{ store.realityStep === 'clip' ? 'klipp' : 'rösta om' }}</template></span>
+    <span>{{ store.valv.name }}</span>
     <span class="fac__rfid" :class="{ 'is-live': rfidConnected }">
       <span class="fac__led" />RFID {{ rfidConnected ? 'LIVE' : 'klick' }}
     </span>
     <button class="fac__btn" :aria-pressed="muted" :title="muted ? 'Ljud av' : 'Ljud på'" @click="toggleMute">
       {{ muted ? '🔇' : '🔊' }}
     </button>
+    <button v-if="store.phase === 'overview' || (store.phase === 'reality' && store.realityStep === 'clip')" class="fac__btn" title="Enter" @click="store.advance()">⏭ vidare</button>
     <button class="fac__btn" @click="store.reset()">⟲ starta om</button>
   </div>
 </template>

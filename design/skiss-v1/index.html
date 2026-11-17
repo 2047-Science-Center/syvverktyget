@@ -1,0 +1,453 @@
+<title>SYV-verktyget Driften</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600;700&family=Courier+Prime:wght@400;700&display=swap">
+<style>
+/* Layout: en kiosk-skärm (4:3, CRT) till vänster, designanteckningar till höger. Papperskortet lever INNE i CRT-ramen. */
+:root{
+  color-scheme: dark;
+  --crt:#0b0f0a; --crt-2:#121810; --amber:#ff9500; --amber-dim:#a86a12;
+  --valv:#e8c020; --paper:#ece2cc; --paper-2:#e2d5b8; --ink:#2a2418; --ink-soft:#6b604c;
+  --stamp-open:#a8740a; --stamp-closed:#3d4250; --page:#070906; --line:#2a3324; --text:#e9e4d6; --muted:#9a9480;
+  --f-crt:'VT323', ui-monospace, monospace; --f-mono:'IBM Plex Mono', ui-monospace, monospace;
+  --f-sans:'IBM Plex Sans', system-ui, sans-serif; --f-type:'Courier Prime', 'Courier New', monospace;
+}
+*{box-sizing:border-box}
+html,body{min-height:100%}
+body{background:var(--page);color:var(--text);font-family:var(--f-sans);font-size:15px;line-height:1.5;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:20px 40px}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 24px}
+header.top h1{font-family:var(--f-crt);font-weight:400;font-size:34px;line-height:1;color:var(--amber);margin:0;letter-spacing:.04em}
+header.top p{margin:0;color:var(--muted);max-width:62ch;font-size:14px}
+nav.steps{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+nav.steps button{font-family:var(--f-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;background:transparent;color:var(--muted);
+  border:1px solid var(--line);border-radius:3px;padding:6px 10px;cursor:pointer}
+nav.steps button[aria-current="true"]{color:var(--crt);background:var(--amber);border-color:var(--amber)}
+nav.steps button:focus-visible,.zone:focus-visible,.ctl:focus-visible{outline:2px solid var(--valv);outline-offset:2px}
+nav.steps .sp{flex:1}
+.ctl{font-family:var(--f-mono);font-size:12px;background:var(--crt-2);color:var(--text);border:1px solid var(--line);border-radius:3px;padding:6px 10px;cursor:pointer}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start}
+@media (max-width:980px){.main{grid-template-columns:minmax(0,1fr)}}
+
+/* ---------- Kiosken ---------- */
+.kiosk{position:relative;background:var(--crt);border:2px solid var(--amber-dim);border-radius:14px;aspect-ratio:4/3;max-width:100%;
+  display:flex;flex-direction:column;padding:18px 22px;gap:12px;overflow:hidden;
+  box-shadow:0 0 0 6px #0e120c, 0 0 60px rgba(255,149,0,.08) inset}
+.kiosk::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:12px;
+  background:repeating-linear-gradient(to bottom, rgba(255,255,255,.025) 0 1px, transparent 1px 3px)}
+@media (max-width:760px){.kiosk{aspect-ratio:auto;min-height:560px;padding:14px}}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:8px;font-family:var(--f-crt);font-size:22px;color:var(--amber);letter-spacing:.08em}
+.badge{border:1px solid var(--valv);color:var(--valv);padding:0 8px;border-radius:3px}
+.bar .dim{color:var(--amber-dim)}
+.stage{flex:1;min-height:0;display:flex;gap:18px;align-items:stretch;justify-content:center}
+.q{font-family:var(--f-sans);font-weight:600;text-align:center;color:var(--text);font-size:clamp(16px,2.2vw,22px);margin:0}
+
+/* ---------- Papper ---------- */
+.paper{position:relative;background:
+   radial-gradient(120% 90% at 20% 10%, rgba(255,255,255,.35), transparent 60%),
+   repeating-linear-gradient(0deg, rgba(60,40,10,.035) 0 2px, transparent 2px 5px), var(--paper);
+  color:var(--ink);border-radius:2px;box-shadow:0 10px 30px rgba(0,0,0,.55), 0 1px 0 rgba(255,255,255,.4) inset;font-family:var(--f-type)}
+.tape{position:absolute;width:86px;height:24px;background:rgba(232,192,32,.55);top:-10px;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.tape.l{left:18px;transform:rotate(-6deg)} .tape.r{right:18px;transform:rotate(5deg)}
+.card{width:min(100%,560px);display:flex;flex-direction:column;padding:16px 18px 14px;gap:10px;transform:rotate(-.6deg)}
+.card .head{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
+.photo{position:relative;flex:1;min-height:140px;background:#1b2016;border:6px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);overflow:hidden}
+.photo img{width:100%;height:100%;object-fit:cover;display:block}
+.photo .idea{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;gap:6px;padding:14px;
+  background:linear-gradient(160deg, #2c321f 0%, #171b12 70%);color:#e7dfc6;font-family:var(--f-mono);font-size:13px;line-height:1.45}
+.photo .idea b{font-family:var(--f-crt);font-weight:400;color:var(--valv);font-size:20px;letter-spacing:.06em}
+.photo .idea .tag{position:absolute;top:10px;left:10px;font-size:11px;letter-spacing:.1em;color:var(--valv);border:1px dashed var(--valv);padding:1px 6px}
+.card h2{margin:0;font-family:var(--f-type);font-weight:700;font-size:clamp(22px,3vw,30px);line-height:1.05;color:var(--ink)}
+.card .blurb{margin:0;font-size:14px;line-height:1.4;color:#3d3526}
+.stamp{position:absolute;right:16px;top:44%;font-family:var(--f-type);font-weight:700;font-size:26px;letter-spacing:.08em;padding:6px 12px;
+  border:4px solid currentColor;border-radius:4px;transform:rotate(-12deg);opacity:.88;mix-blend-mode:multiply;background:rgba(236,226,204,.35);
+  display:flex;align-items:center;gap:8px;animation:thud .28s ease-out}
+.stamp.open{color:var(--stamp-open)} .stamp.closed{color:var(--stamp-closed)}
+@keyframes thud{from{transform:rotate(-12deg) scale(1.6);opacity:0}to{transform:rotate(-12deg) scale(1);opacity:.88}}
+@media (prefers-reduced-motion:reduce){.stamp{animation:none}}
+
+/* ---------- Dörr-zoner (läsarna) ---------- */
+.zones{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.zone{display:flex;align-items:center;gap:14px;justify-content:center;background:var(--crt-2);border:1px solid var(--line);border-radius:8px;
+  padding:10px 14px;cursor:pointer;color:var(--text);font:inherit;text-align:left}
+.zone:hover{border-color:var(--amber-dim)}
+.zone .lbl{display:flex;flex-direction:column;line-height:1.15}
+.zone .lbl strong{font-family:var(--f-crt);font-weight:400;font-size:28px;letter-spacing:.06em}
+.zone .lbl span{font-family:var(--f-mono);font-size:11px;color:var(--muted);letter-spacing:.06em}
+.zone.no strong{color:#b9bfcc} .zone.yes strong{color:var(--valv)}
+.zone.flash{border-color:var(--amber)}
+.pips{display:flex;justify-content:center;align-items:center;gap:10px;font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.pip{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--amber-dim)}
+.pip.on{background:var(--amber);border-color:var(--amber)}
+
+/* ---------- Start ---------- */
+.inflytt{width:min(100%,520px);padding:24px 26px 22px;display:flex;flex-direction:column;gap:14px;transform:rotate(-1.2deg);align-self:center}
+.inflytt .h{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
+.inflytt h2{margin:0;font-size:26px;letter-spacing:.04em}
+.field{display:flex;align-items:flex-end;gap:10px;font-size:16px;letter-spacing:.06em;text-transform:uppercase}
+.field .ln{flex:1;border-bottom:1.5px solid var(--ink);min-height:24px;font-family:var(--f-type);text-transform:none;letter-spacing:0;font-size:15px;color:var(--ink-soft)}
+.field .valvstamp{font-weight:700;color:var(--stamp-open);border:3px solid currentColor;padding:2px 10px;transform:rotate(-6deg);letter-spacing:.12em}
+.field.big{font-size:22px;font-weight:700}
+.field.big .ln{min-height:34px;border-bottom-width:2px}
+
+/* ---------- Barriär / översikt ---------- */
+.grid8{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;width:100%;align-content:center}
+@media (max-width:760px){.grid8{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.mini{padding:10px 10px 8px;display:flex;flex-direction:column;gap:6px;align-items:center;text-align:center;font-size:13px}
+.mini:nth-child(odd){transform:rotate(-1deg)} .mini:nth-child(even){transform:rotate(.8deg)}
+.mini b{font-size:14px;line-height:1.1}
+.mini .count{font-family:var(--f-mono);font-size:12px;color:var(--ink-soft)}
+.doors6{display:flex;gap:3px;justify-content:center;flex-wrap:wrap}
+
+/* ---------- Klipp ---------- */
+.side{width:min(34%,300px);display:flex;flex-direction:column;gap:12px;justify-content:center}
+.side .paper{padding:14px 16px;transform:rotate(-1deg);display:flex;flex-direction:column;gap:6px}
+.side .k{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
+.side .v{font-size:19px;font-weight:700;line-height:1.1}
+.side .arrow{font-family:var(--f-crt);color:var(--amber);font-size:26px;text-align:center;line-height:1}
+.side .real{background:#fbfaf6;color:#111;border-radius:6px;padding:12px 14px;font-family:var(--f-sans);box-shadow:0 8px 20px rgba(0,0,0,.5)}
+.side .real .k{color:#666;font-family:var(--f-mono)}
+.side .real .v{font-family:var(--f-sans)}
+.phone{height:100%;max-height:100%;aspect-ratio:9/16;max-width:46%;background:#000;border-radius:22px;border:3px solid #2b2b2b;position:relative;overflow:hidden;
+  box-shadow:0 12px 40px rgba(0,0,0,.6)}
+@media (max-width:760px){.stage.clip{flex-direction:column;align-items:center}.side{width:100%}.phone{height:auto;width:min(70%,260px);max-width:none}}
+.phone .vid{position:absolute;inset:0;background:
+   linear-gradient(180deg, rgba(0,0,0,.0) 50%, rgba(0,0,0,.75) 100%),
+   radial-gradient(80% 50% at 50% 35%, #3f4a52 0%, #1d2328 70%);display:flex;align-items:center;justify-content:center}
+.phone .play{width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.18);border:0;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.phone .play svg{margin-left:4px}
+.phone .hook{position:absolute;top:18%;left:8%;right:8%;text-align:center;font-family:var(--f-sans);font-weight:700;font-size:clamp(15px,1.8vw,20px);color:#fff;
+  text-shadow:0 2px 6px rgba(0,0,0,.8);background:rgba(0,0,0,.35);padding:6px 8px;border-radius:6px}
+.phone .meta{position:absolute;left:10px;right:44px;bottom:16px;color:#fff;font-family:var(--f-sans);font-size:12px;line-height:1.35}
+.phone .meta b{display:block;font-size:13px}
+.phone .rail{position:absolute;right:8px;bottom:56px;display:flex;flex-direction:column;gap:14px}
+.phone .rail i{display:block;width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.22)}
+.phone .prog{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.2)}
+.phone .prog span{display:block;height:100%;width:0;background:#fff}
+.phone .real-stamp{position:absolute;top:10px;left:10px;font-family:var(--f-type);font-weight:700;font-size:13px;letter-spacing:.1em;color:var(--valv);
+  border:2px solid var(--valv);padding:1px 8px;transform:rotate(-4deg);background:rgba(0,0,0,.4)}
+.phone .ph{position:absolute;top:44px;left:10px;right:10px;font-family:var(--f-mono);font-size:10.5px;color:#cfd6da;opacity:.85;text-align:center}
+
+/* ---------- Rösta om / summering ---------- */
+.revote{display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;width:100%}
+.mini-card{display:flex;gap:14px;align-items:center;padding:10px 14px;transform:rotate(-.8deg);max-width:520px;width:100%}
+.mini-card .thumb{width:84px;height:64px;flex:none;border:4px solid #fff;background:#1b2016;overflow:hidden}
+.mini-card .thumb img{width:100%;height:100%;object-fit:cover}
+.mini-card b{font-size:18px}
+.before{font-family:var(--f-mono);font-size:13px;color:var(--muted);text-align:center}
+.moved{font-family:var(--f-crt);font-size:24px;color:var(--valv);letter-spacing:.05em;text-align:center;min-height:1.2em}
+.sumwrap{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;width:100%;min-height:0}
+@media (max-width:760px){.sumwrap{grid-template-columns:minmax(0,1fr)}}
+.sumlist{display:flex;flex-direction:column;gap:5px;overflow:auto;min-height:0}
+.sumrow{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:10px;align-items:center;font-family:var(--f-mono);font-size:13px;color:var(--text);
+  padding:4px 8px;border-bottom:1px dashed var(--line)}
+.sumrow .n{font-family:var(--f-type);font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sumrow .c{font-variant-numeric:tabular-nums;color:var(--muted)}
+.sumrow .mv{font-family:var(--f-crt);font-size:20px;min-width:3ch;text-align:right}
+.sumrow.up .mv{color:var(--valv)} .sumrow.down .mv{color:#b9bfcc} .sumrow.same .mv{color:var(--amber-dim)}
+.takehome{padding:16px 18px;display:flex;flex-direction:column;gap:8px;transform:rotate(1deg);font-size:13px;align-self:start}
+.takehome .h{display:flex;justify-content:space-between;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
+.takehome ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.takehome li{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px dotted #b9ab8c;padding-bottom:2px}
+.takehome li .bx{display:flex;gap:6px}
+.takehome li .bx span{width:16px;height:16px;border:1.5px solid var(--ink);display:inline-block}
+.takehome .legend{display:flex;gap:12px;justify-content:flex-end;font-size:10.5px;letter-spacing:.08em;color:var(--ink-soft);text-transform:uppercase}
+
+/* ---------- Anteckningar ---------- */
+aside.notes{border:1px solid var(--line);border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;background:#0c100b}
+aside.notes h3{margin:0;font-family:var(--f-crt);font-weight:400;color:var(--amber);font-size:24px;letter-spacing:.04em;line-height:1.1}
+aside.notes .phase{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+aside.notes dl{margin:0;display:flex;flex-direction:column;gap:10px}
+aside.notes dt{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--valv)}
+aside.notes dd{margin:2px 0 0;font-size:14px;color:var(--text)}
+.chip{display:inline-block;font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;color:var(--crt);background:var(--amber-dim);padding:1px 6px;border-radius:2px;margin-left:6px;vertical-align:middle}
+.foot{color:var(--muted);font-size:12.5px;font-family:var(--f-mono)}
+.navrow{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>SYV-VERKTYGET · DRIFTEN</h1>
+    <p>Klickbar skiss av flödet: kortet från övergången, svep på åtta roller, så valde ni, verkligheten per roll, rösta om och dörrarna man tar med sig. Klicka på dörrarna eller använd piltangenterna (← stängd, → öppen). Tre klick per kort, ett per person vid skärmen.</p>
+  </header>
+
+  <nav class="steps" id="steps" aria-label="Moment"></nav>
+
+  <div class="main">
+    <div>
+      <div class="kiosk" id="kiosk" aria-live="polite"></div>
+    </div>
+    <aside class="notes" id="notes"></aside>
+  </div>
+  <div class="navrow">
+    <button class="ctl" id="prev" type="button">← Föregående skärm</button>
+    <button class="ctl" id="auto" type="button">Fyll i röster åt mig</button>
+    <button class="ctl" id="next" type="button">Nästa skärm →</button>
+  </div>
+  <p class="foot">Skiss, inte appen. Bilderna är genererade utkast (gpt-image-2), utom Markförvaltaren som är den befintliga Valvet-bilden. Andra skärmens tre röster är exempeldata. Virkeslaget kommer från rollistan i oktober. Incidentledaren är ett förslag på roll 8.</p>
+</div>
+
+<script>
+const ROLES = [
+  {id:'process', img:'processoperatoren.jpg', title:'Processoperatören', real:'Processoperatör', blurb:'Kör och vaktar valvets processer dygnet runt. Läser av, finjusterar, griper in när något larmar.',
+   idea:'Fem skärmar, ett blinkande larm och en kaffekopp på väg att välta. Fångar koppen med ena handen och kvitterar larmet med den andra.',
+   hook:'Hur mycket tjänar en processoperatör?', clipNote:'TikTok-klipp, ca 60 s, 9:16. Josef lägger in.', B:['ja','nej','ja'], RB:['ja','ja','ja']},
+  {id:'falttek', img:'faltteknikern.jpg', title:'Fältteknikern', real:'Underhålls- och servicetekniker', blurb:'Lagar det som gått sönder ute i valvets gångar. Reser, löser, får igång.',
+   idea:'Halvvägs in i en ventilationstrumma, bara benen syns. En ficklampa i munnen och tummen upp genom gallret.',
+   hook:'En dag som servicetekniker', clipNote:'Klipp från verkligheten, 30–60 s, 9:16.', B:['nej','ja','nej'], RB:['ja','ja','nej']},
+  {id:'medik', img:'faltmedikern.jpg', title:'Fältmedikern', real:'Undersköterska · sjuksköterska', blurb:'Tar hand om människor när det gäller. Snabba beslut, trygg hand, aldrig ensam i laget.',
+   idea:'Plåstrar om en kollegas tumme mitt i valvets matsal medan hela bordet håller andan och tittar.',
+   hook:'Det ingen ser på ett skift i vården', clipNote:'Klipp från verkligheten, 30–60 s, 9:16.', B:['ja','nej','nej'], RB:['ja','nej','ja']},
+  {id:'harbarge', img:'harbargesvarden.jpg', title:'Härbärgesvärden', real:'Kock · restaurang och hotell', blurb:'Får ett rum fullt av gäster att må bra. Tempo, timing och allt på plats samtidigt.',
+   idea:'Sex tallrikar balanserade på armarna i exakt samma sekund som strömmen blinkar till.',
+   hook:'Lunchrusning: 200 portioner på 40 minuter', clipNote:'Klipp från verkligheten, 30–60 s, 9:16.', B:['ja','ja','nej'], RB:['ja','ja','nej']},
+  {id:'mark', title:'Markförvaltaren', real:'Lantbrukare · växtodlare', blurb:'Odlar valvets mat i de stora odlingstälten. Sköter grödor och system så att basen klarar sig själv.',
+   img:'mark.jpg', hook:'Så odlar man inomhus året runt', clipNote:'Klipp från verkligheten, 30–60 s, 9:16.', B:['nej','nej','ja'], RB:['nej','ja','ja']},
+  {id:'vatten', img:'vattenmastaren.jpg', title:'Vattenmästaren', real:'VA-tekniker · vattenrening', blurb:'Håller valvets vatten rent och i kretslopp. Renar, återvinner, övervakar.',
+   idea:'Håller upp ett provrör mot lampan. På etiketten står det, med tusch: "DRICKBART?".',
+   hook:'Vart tar vattnet vägen när du spolar?', clipNote:'Klipp från verkligheten, 30–60 s, 9:16.', B:['nej','ja','nej'], RB:['nej','ja','nej']},
+  {id:'virke', img:'virkeslaget.jpg', title:'Virkeslaget', real:'Skogsmaskinförare', blurb:'Skördar valvets virke i den underjordiska skogshallen. Stora maskiner, små rörelser.',
+   idea:'Kör skördaren med ena handen, ett nyfällt stockvirke i griparen, och tar en tugga av mackan med den andra.',
+   hook:'Skogsmaskinförare: hur mycket tjänar man?', clipNote:'Klipp från verkligheten, 30–60 s, 9:16.', B:['ja','nej','ja'], RB:['ja','nej','ja']},
+  {id:'incident', img:'incidentledaren.jpg', title:'Incidentledaren', real:'Larmoperatör · räddningsledare', blurb:'Den lugnaste i rummet när något larmar. Leder, prioriterar, håller ihop.', proposal:true,
+   idea:'Står helt stilla med en walkie-talkie i rött larmljus medan alla andra springer förbi.',
+   hook:'En kväll på larmcentralen', clipNote:'Klipp från verkligheten, 30–60 s, 9:16.', B:['nej','nej','nej'], RB:['nej','ja','nej']},
+];
+// Exempelröster för skärm A om man hoppar förbi svepet
+const SAMPLE_A  = [['ja','ja','nej'],['nej','nej','ja'],['nej','ja','nej'],['ja','ja','ja'],['nej','ja','nej'],['ja','nej','nej'],['ja','ja','nej'],['nej','nej','ja']];
+const SAMPLE_RA = [['ja','ja','nej'],['ja','nej','ja'],['ja','ja','nej'],['ja','ja','ja'],['ja','ja','nej'],['ja','nej','nej'],['ja','ja','nej'],['nej','ja','ja']];
+
+const SCREENS = [{k:'start'}];
+ROLES.forEach((r,i)=>SCREENS.push({k:'svep',i}));
+SCREENS.push({k:'barriar'});
+ROLES.forEach((r,i)=>{SCREENS.push({k:'klipp',i});SCREENS.push({k:'omrost',i});});
+SCREENS.push({k:'summa'});
+const GROUPS = [['start','Kortet'],['svep','Svep ×8'],['barriar','Så valde ni'],['klipp','Verkligheten'],['summa','Dörrarna']];
+
+const state = {s:0, sweep:ROLES.map(()=>[]), re:ROLES.map(()=>[]), playing:null};
+
+function door(open, size=34, col){
+  const c = col || (open ? 'var(--valv)' : '#9aa1ae');
+  if(open){
+    return `<svg width="${size}" height="${size*1.35}" viewBox="0 0 40 54" aria-hidden="true">
+      <rect x="4" y="3" width="32" height="49" rx="1" fill="#1a1608" stroke="${c}" stroke-width="2.5"/>
+      <rect x="7" y="6" width="26" height="44" fill="${c}" opacity=".55"/>
+      <polygon points="4,3 15,8 15,47 4,52" fill="#2e2a1c" stroke="${c}" stroke-width="2"/>
+      <circle cx="12.5" cy="28" r="1.4" fill="${c}"/></svg>`;
+  }
+  return `<svg width="${size}" height="${size*1.35}" viewBox="0 0 40 54" aria-hidden="true">
+    <rect x="4" y="3" width="32" height="49" rx="1" fill="#1b1e24" stroke="${c}" stroke-width="2.5"/>
+    <rect x="9" y="8" width="22" height="16" fill="none" stroke="${c}" stroke-width="1.2" opacity=".6"/>
+    <rect x="9" y="28" width="22" height="18" fill="none" stroke="${c}" stroke-width="1.2" opacity=".6"/>
+    <circle cx="30" cy="28" r="1.8" fill="${c}"/></svg>`;
+}
+const maj = v => v.filter(x=>x==='ja').length >= 2 ? 'ja' : 'nej';
+function sweepOf(i){ return state.sweep[i].length===3 ? state.sweep[i] : SAMPLE_A[i]; }
+function reOf(i){ return state.re[i].length===3 ? state.re[i] : SAMPLE_RA[i]; }
+const isSample = (arr)=>arr.length<3;
+const yes = a => a.filter(x=>x==='ja').length;
+
+function photo(r){
+  if(r.img) return `<div class="photo"><img src="${r.img}" alt="${r.idea || r.title}"></div>`;
+  return `<div class="photo"><div class="idea"><span class="tag">BILDIDÉ · ATT GENERERA</span><b>${r.title.toUpperCase()}</b>${r.idea}</div></div>`;
+}
+function thumb(r){
+  return r.img ? `<div class="thumb"><img src="${r.img}" alt=""></div>` : `<div class="thumb" style="display:flex;align-items:center;justify-content:center;font-family:var(--f-crt);color:var(--valv);font-size:18px">BILD</div>`;
+}
+function zones(){
+  return `<div class="zones">
+    <button class="zone no" type="button" data-v="nej">${door(false,30)}<span class="lbl"><strong>STÄNGD</strong><span>◀ VÄNSTER LÄSARE</span></span></button>
+    <button class="zone yes" type="button" data-v="ja"><span class="lbl" style="text-align:right"><strong>ÖPPEN</strong><span>HÖGER LÄSARE ▶</span></span>${door(true,30)}</button>
+  </div>`;
+}
+function pips(n, label){ return `<div class="pips">${[0,1,2].map(k=>`<span class="pip ${k<n?'on':''}"></span>`).join('')}<span>${n} / 3 ${label}</span></div>`; }
+function doors6(a, b, size=16){ return `<div class="doors6">${[...a,...b].map(v=>door(v==='ja',size, v==='ja'?'#a8740a':'#5a5f6b')).join('')}</div>`; }
+
+const NOTES = {
+  start:{h:'Kortet från övergången', phase:'Sista bilden i filmen = första skärmen',
+    dl:[['Vad händer','Filmen ”Kortet lyfts ut” slutar på inflyttningskortet. Valvet är redan stämplat. Raden BRA PÅ är tom, och det är den verktyget handlar om.'],
+        ['Papperet','Samma kort finns i verkligheten: förtryckt, ett per person. De får det i handen, och appen använder samma estetik.'],
+        ['Ljud','Fläkten har tystnat i filmen. Här ligger en ljus, låg bädd. Inget mer.']]},
+  svep:{h:'Svep: kan du tänka dig det här?', phase:'Skärm A · tre personer · en roll i taget',
+    dl:[['Bilden','En situation i stunden i Valvet, inte ett stockfoto. Samma värld och samma overall som i stationerna, men nya bilder. Varje roll är ett papperskort med tejp.'],
+        ['Dörrarna','Två läsare, två val. Vänster = stängd dörr, höger = öppen dörr. Majoriteten av de tre stämplar kortet.'],
+        ['Integritet','Pricken visar att någon har röstat, inte vad. Alla bippar låter likadant.'],
+        ['Ljud','Öppen: kort varm ton uppåt. Stängd: dörren glider igen, mjukt. Aldrig ett ”fel”-ljud.']]},
+  barriar:{h:'Så valde ni', phase:'Båda skärmarna · sex personer',
+    dl:[['Vad händer','Alla åtta korten på bordet med gruppens dörrar. Den snabbare skärmen väntar in den andra här.'],
+        ['Samtal','Bra paus för SYV: ”Vilken var lättast att stänga? Varför?”'],
+        ['Övergång','”Nu får ni se hur det ser ut på riktigt.” Ett papper vänds.']]},
+  klipp:{h:'Verkligheten', phase:'Per roll · gemensamt',
+    dl:[['Vad händer','Valvets roll får sitt riktiga namn. Sedan spelas ett riktigt klipp, stående som på mobilen, där yrket syns i verkligheten.'],
+        ['Klippet','Exempel: ett TikTok-klipp om hur mycket en processoperatör tjänar, ca 60 s. Det ser ut som något de själva scrollar förbi, inte som en skolfilm.'],
+        ['Bryggan','Papperet (Valvet) till vänster, telefonen (verkligheten) i mitten. Bara valvfärgen går över gränsen.'],
+        ['Ljud','Bädden tystnar helt när klippet spelar. Klippets eget ljud är innehållet.']]},
+  omrost:{h:'Har du ändrat dig?', phase:'Per roll · alla röstar om',
+    dl:[['Vad händer','Samma två dörrar igen, direkt efter klippet. Ovanför står hur gruppen röstade nyss.'],
+        ['Det som räknas','Inte hur många som sa ja, utan om någon dörr rörde sig. ”1 dörr öppnades” är vinsten.'],
+        ['Ljud','En dörr som öppnas får ett mjukt glid uppåt. Ingenting låter som att man gjort fel om man står kvar.']]},
+  summa:{h:'Dörrarna', phase:'Avslut · hela gruppen',
+    dl:[['På skärmen','Gruppens dörrar före och efter verkligheten, per roll. Pilen visar vad som rörde sig.'],
+        ['I handen','Det tryckta kortet: åtta roller med två rutor var. Var och en kryssar sina egna dörrar med penna och fyller i BRA PÅ själv. Inget sparas digitalt.'],
+        ['Sedan','Kortet följer med hem och till SYV-samtalet i skolan.']]},
+};
+
+function render(){
+  const sc = SCREENS[state.s];
+  const k = document.getElementById('kiosk');
+  const notesKey = sc.k;
+  let html = '';
+  const r = sc.i!=null ? ROLES[sc.i] : null;
+
+  if(sc.k==='start'){
+    html = `<div class="bar"><span class="badge">DRIFTEN</span><span class="dim">SKÄRM A</span></div>
+    <div class="stage" style="align-items:center">
+      <div class="paper inflytt"><span class="tape l"></span><span class="tape r"></span>
+        <div class="h"><span>Valvet · Inflyttningskort</span><span>Nr 0418</span></div>
+        <h2>INFLYTTNINGSKORT</h2>
+        <div class="field">Namn<span class="ln">&nbsp;</span></div>
+        <div class="field">Valv<span class="valvstamp">DRIFTEN</span><span class="ln" style="border:0"></span></div>
+        <div class="field big">Bra på<span class="ln">&nbsp;</span></div>
+      </div>
+    </div>
+    <p class="q">Åtta yrken från Valvet. Kan du tänka dig dem? Bippa för att börja.</p>`;
+  }
+  else if(sc.k==='svep'){
+    const v = state.sweep[sc.i]; const done = v.length===3; const m = done ? maj(v) : null;
+    html = `<div class="bar"><span class="badge">DRIFTEN</span><span>ROLL ${sc.i+1} / 8</span></div>
+    <div class="stage">
+      <div class="paper card"><span class="tape l"></span><span class="tape r"></span>
+        <div class="head"><span>Valvet · Driften</span><span>${r.proposal?'roll · förslag':'roll'}</span></div>
+        ${photo(r)}
+        <h2>${r.title}</h2>
+        <p class="blurb">${r.blurb}</p>
+        ${done?`<div class="stamp ${m==='ja'?'open':'closed'}">${m==='ja'?'DÖRREN ÖPPEN':'DÖRREN STÄNGD'}</div>`:''}
+      </div>
+    </div>
+    <p class="q">Kan du tänka dig det här?</p>
+    ${zones()}
+    ${pips(v.length,'har bippat')}`;
+  }
+  else if(sc.k==='barriar'){
+    const sample = state.sweep.some(isSample);
+    html = `<div class="bar"><span class="badge">DRIFTEN</span><span>SÅ VALDE NI${sample?'<span class="chip">EXEMPELDATA</span>':''}</span></div>
+    <div class="stage" style="align-items:center"><div class="grid8">
+      ${ROLES.map((r,i)=>{const a=sweepOf(i); const n=yes(a)+yes(r.B); return `<div class="paper mini"><b>${r.title}</b>${doors6(a,r.B,13)}<span class="count">${n} av 6 öppnade</span></div>`;}).join('')}
+    </div></div>
+    <p class="q">Vill ni se hur det ser ut på riktigt?</p>`;
+  }
+  else if(sc.k==='klipp'){
+    const a = sweepOf(sc.i); const n = yes(a)+yes(r.B);
+    html = `<div class="bar"><span class="badge">DRIFTEN</span><span>VERKLIGHETEN · ${sc.i+1} / 8</span></div>
+    <div class="stage clip">
+      <div class="side">
+        <div class="paper"><span class="tape l" style="width:60px"></span>
+          <span class="k">I Valvet</span><span class="v">${r.title}</span>
+          ${doors6(a,r.B,14)}<span class="k" style="text-transform:none;letter-spacing:0;font-size:12px">${n} av 6 öppnade dörren</span>
+        </div>
+        <div class="arrow">▼</div>
+        <div class="real"><span class="k">På riktigt</span><div class="v">${r.real}</div></div>
+      </div>
+      <div class="phone">
+        <div class="vid"><button class="play" type="button" id="play" aria-label="Spela klippet">
+          <svg width="26" height="30" viewBox="0 0 26 30"><polygon points="0,0 26,15 0,30" fill="#fff"/></svg></button></div>
+        <span class="real-stamp">PÅ RIKTIGT</span>
+        <div class="ph">[ ${r.clipNote} ]</div>
+        <div class="hook">${r.hook}</div>
+        <div class="rail"><i></i><i></i><i></i></div>
+        <div class="meta"><b>@konto_från_verkligheten</b>${r.real.split(' · ')[0]} i jobbet</div>
+        <div class="prog"><span id="prog"></span></div>
+      </div>
+    </div>`;
+  }
+  else if(sc.k==='omrost'){
+    const a = sweepOf(sc.i); const before = yes(a)+yes(r.B);
+    const v = state.re[sc.i]; const done = v.length===3;
+    let moved = '';
+    if(done){ const after = yes(v)+yes(r.RB); const d = after-before;
+      moved = d>0 ? `${d} ${d===1?'dörr öppnades':'dörrar öppnades'}` : d<0 ? `${-d} ${-d===1?'dörr stängdes':'dörrar stängdes'}` : 'Alla står kvar. Det är också ett svar.'; }
+    html = `<div class="bar"><span class="badge">DRIFTEN</span><span>RÖSTA OM · ${sc.i+1} / 8</span></div>
+    <div class="stage"><div class="revote">
+      <div class="paper mini-card">${thumb(r)}<div style="display:flex;flex-direction:column;gap:4px"><b>${r.title}</b><span style="font-size:13px;color:var(--ink-soft)">på riktigt: ${r.real}</span></div></div>
+      <div class="before">Nyss: ${before} av 6 öppna dörrar ${doors6(a,r.B,12)}</div>
+      <p class="q" style="font-size:clamp(20px,2.8vw,30px)">Har du ändrat dig?</p>
+      <div class="moved">${moved}</div>
+    </div></div>
+    ${zones()}
+    ${pips(v.length,'har bippat igen')}`;
+  }
+  else if(sc.k==='summa'){
+    const sample = state.sweep.some(isSample) || state.re.some(isSample);
+    const rows = ROLES.map((r,i)=>{const b=yes(sweepOf(i))+yes(r.B), a=yes(reOf(i))+yes(r.RB), d=a-b;
+      const cls = d>0?'up':d<0?'down':'same'; const mv = d>0?`▲${d}`:d<0?`▼${-d}`:'→';
+      return `<div class="sumrow ${cls}"><span class="n">${r.title}</span><span class="c">${door(b>=3,12)} ${b}/6</span><span class="c">${door(a>=3,12)} ${a}/6</span><span class="mv">${mv}</span></div>`;}).join('');
+    const opened = ROLES.reduce((s,r,i)=>s+Math.max(0,(yes(reOf(i))+yes(r.RB))-(yes(sweepOf(i))+yes(r.B))),0);
+    html = `<div class="bar"><span class="badge">DRIFTEN</span><span>DÖRRARNA${sample?'<span class="chip">EXEMPELDATA</span>':''}</span></div>
+    <div class="stage"><div class="sumwrap">
+      <div style="display:flex;flex-direction:column;gap:8px;min-height:0">
+        <p class="moved" style="text-align:left;font-size:28px">${opened} dörrar öppnades när ni såg verkligheten</p>
+        <div class="sumrow" style="color:var(--muted);font-size:11px;letter-spacing:.1em;border:0"><span>ROLL</span><span>FÖRE</span><span>EFTER</span><span></span></div>
+        <div class="sumlist">${rows}</div>
+      </div>
+      <div class="paper takehome"><span class="tape r" style="width:60px"></span>
+        <div class="h"><span>Mina dörrar · Driften</span><span>ta med</span></div>
+        <div class="legend"><span>stängd</span><span>öppen</span></div>
+        <ul>${ROLES.map(r=>`<li><span>${r.title}</span><span class="bx"><span></span><span></span></span></li>`).join('')}</ul>
+        <div class="field big" style="font-size:16px;margin-top:6px">Bra på<span class="ln">&nbsp;</span></div>
+      </div>
+    </div></div>
+    <p class="q">Dörrarna stängs inte av sig själva. Det är du som väljer när.</p>`;
+  }
+  k.innerHTML = html;
+
+  // anteckningar
+  const n = NOTES[notesKey];
+  document.getElementById('notes').innerHTML = `<span class="phase">${n.phase}</span><h3>${n.h}</h3><dl>${n.dl.map(([t,d])=>`<dt>${t}</dt><dd>${d}</dd>`).join('')}</dl>`;
+
+  // steg
+  const cur = sc.k==='omrost' ? 'klipp' : sc.k;
+  document.getElementById('steps').innerHTML = GROUPS.map(([g,l])=>`<button type="button" data-g="${g}" aria-current="${g===cur}">${l}</button>`).join('') +
+    `<span class="sp"></span><span class="foot">${state.s+1} / ${SCREENS.length}</span>`;
+
+  k.querySelectorAll('.zone').forEach(b=>b.addEventListener('click',()=>vote(b.dataset.v, b)));
+  const p = document.getElementById('play'); if(p) p.addEventListener('click', playClip);
+}
+
+let advanceTimer=null, clipTimer=null;
+function vote(v, el){
+  const sc = SCREENS[state.s];
+  const arr = sc.k==='svep' ? state.sweep[sc.i] : sc.k==='omrost' ? state.re[sc.i] : null;
+  if(!arr || arr.length>=3) return;
+  arr.push(v);
+  render();
+  const zone = document.querySelector(`.zone[data-v="${v}"]`); if(zone){zone.classList.add('flash'); setTimeout(()=>zone.classList.remove('flash'),180);}
+  if(arr.length===3){ clearTimeout(advanceTimer); advanceTimer=setTimeout(()=>go(state.s+1), sc.k==='svep'?1300:2200); }
+}
+function playClip(){
+  const bar = document.getElementById('prog'); const btn = document.getElementById('play'); if(!bar) return;
+  btn.style.opacity='0'; let t=0; clearInterval(clipTimer);
+  clipTimer = setInterval(()=>{ t+=1; bar.style.width = Math.min(100,t*2.5)+'%'; if(t>=40){clearInterval(clipTimer); go(state.s+1);} }, 100);
+}
+function go(i){ clearTimeout(advanceTimer); clearInterval(clipTimer); state.s = Math.max(0, Math.min(SCREENS.length-1, i)); render(); }
+
+document.getElementById('steps').addEventListener('click', e=>{
+  const g = e.target.closest('button')?.dataset.g; if(!g) return;
+  go(SCREENS.findIndex(s=>s.k===g));
+});
+document.getElementById('prev').addEventListener('click',()=>go(state.s-1));
+document.getElementById('next').addEventListener('click',()=>go(state.s+1));
+document.getElementById('auto').addEventListener('click',()=>{
+  ROLES.forEach((r,i)=>{ if(state.sweep[i].length<3) state.sweep[i]=[...SAMPLE_A[i]]; if(state.re[i].length<3) state.re[i]=[...SAMPLE_RA[i]]; });
+  render();
+});
+document.addEventListener('keydown', e=>{
+  if(['INPUT','TEXTAREA','BUTTON'].includes(e.target.tagName) && (e.key===' '||e.key==='Enter')) return;
+  const sc = SCREENS[state.s];
+  const voting = sc.k==='svep' || sc.k==='omrost';
+  if(e.key==='ArrowLeft' || e.key.toLowerCase()==='n'){ if(voting) vote('nej'); else go(state.s-1); e.preventDefault(); }
+  else if(e.key==='ArrowRight' || e.key.toLowerCase()==='j'){ if(voting) vote('ja'); else go(state.s+1); e.preventDefault(); }
+  else if(e.key===' ' || e.key==='Enter'){ if(sc.k==='klipp'){ playClip(); e.preventDefault(); } }
+});
+render();
+</script>

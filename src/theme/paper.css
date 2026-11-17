@@ -1,0 +1,159 @@
+/*
+ * Papperet inne i Valvets maskin (v2). CRT-ramen (crt.css) är maskinen;
+ * papperskorten ligger inne i den: krämvitt papper, tejp i valvfärgen,
+ * Courier Prime för maskinskrift och stämplar. Look från design/skiss-v1.
+ *
+ * Valvfärgen sätts per lek på appens rot som --valv (App.vue). Allt annat
+ * härleds från den.
+ */
+
+:root {
+  --valv: #e8c020;
+  --paper: #ece2cc;
+  --paper-2: #e2d5b8;
+  --ink: #2a2418;
+  --ink-soft: #6b604c;
+  --closed: #9aa1ae; /* stängd dörr på CRT-botten */
+  --closed-ink: #3d4250; /* stängd stämpel på papper */
+  --font-type: 'Courier Prime', 'Courier New', ui-monospace, monospace;
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+}
+
+.valv-scope {
+  /* Valvfärgen mörkad mot bläcket = stämpelfärgen för ÖPPEN på papper. */
+  --stamp-open: color-mix(in srgb, var(--valv) 62%, #3a2a08);
+  --tape: color-mix(in srgb, var(--valv) 58%, transparent);
+}
+
+.paper {
+  position: relative;
+  background:
+    radial-gradient(120% 90% at 20% 10%, rgba(255, 255, 255, 0.35), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(60, 40, 10, 0.035) 0 2px, transparent 2px 5px),
+    var(--paper);
+  color: var(--ink);
+  border-radius: 2px;
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.4) inset;
+  font-family: var(--font-type);
+  text-shadow: none;
+}
+
+.tape {
+  position: absolute;
+  width: 5.5em;
+  height: 1.5em;
+  background: var(--tape);
+  top: -0.65em;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  z-index: 2;
+}
+.tape--l {
+  left: 1.2em;
+  transform: rotate(-6deg);
+}
+.tape--r {
+  right: 1.2em;
+  transform: rotate(5deg);
+}
+
+/* Stämpel: DÖRREN ÖPPEN / DÖRREN STÄNGD / PÅ RIKTIGT */
+.stamp {
+  position: absolute;
+  font-family: var(--font-type);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.25em 0.6em;
+  border: 0.18em solid currentColor;
+  border-radius: 4px;
+  transform: rotate(-12deg);
+  opacity: 0.9;
+  mix-blend-mode: multiply;
+  background: rgba(236, 226, 204, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  white-space: nowrap;
+  animation: stamp-thud 0.28s var(--ease-out) both;
+  z-index: 3;
+}
+.stamp--open {
+  color: var(--stamp-open);
+}
+.stamp--closed {
+  color: var(--closed-ink);
+}
+@keyframes stamp-thud {
+  from {
+    transform: rotate(-12deg) scale(1.6);
+    opacity: 0;
+  }
+  to {
+    transform: rotate(-12deg) scale(1);
+    opacity: 0.9;
+  }
+}
+
+/* Fråga/rubrik på CRT-botten (sans, ljus, läsbar på 1,5 m). */
+.crt-q {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  text-align: center;
+  color: var(--color-ink-strong);
+  text-shadow: none;
+  font-size: clamp(1.4rem, 3.4vh, 2.4rem);
+  line-height: 1.2;
+}
+
+/* Skrivfält på papper (inflyttningskortet, ta-med-kortet). */
+.field {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.field__ln {
+  flex: 1;
+  border-bottom: 1.5px solid var(--ink);
+  min-height: 1.5em;
+}
+.field--big {
+  font-weight: 700;
+}
+.field--big .field__ln {
+  border-bottom-width: 2px;
+  min-height: 2em;
+}
+
+.enter-up {
+  animation: enter-up 0.42s var(--ease-out) both;
+}
+@keyframes enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px) rotate(var(--tilt, 0deg));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(var(--tilt, 0deg));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stamp,
+  .enter-up {
+    animation: none;
+  }
+}
+
+/* En skärm i flödet: rubrikrad, scen, fråga/prickar. */
+.screen {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.6rem, 1.8vh, 1.2rem);
+}

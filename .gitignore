@@ -6,3 +6,6 @@ dist-ssr
 .vite
 coverage
 .claude/worktrees/
+
+# Bildutkast (godkända kopieras till public/cards/)
+bildgen/utkast/

@@ -5,11 +5,10 @@
  * grupp-/skärmstorlek, texter, broker-adresser) är data här. Pilot→drift = byt
  * MODE och fyll stubbarna i adaptrarna — rör aldrig flödeslogiken.
  *
- * STATUS: skarp prototyp för ETT valv (Driften). Media (kort-bilder +
- * näringslivsklipp) pekas ut mot `public/`-sökvägar nedan; tills filerna
- * droppas visar MediaSlot en [BILD]/[VIDEO]-platshållare (tål 404). Rollistan
- * för Driften är ett UTKAST (se session 2026-10-12) och ska stämmas mot X&Y:s
- * riktiga valv-/rollspec.
+ * v2 (2026-11-16): kortleken (4 valv × 8 roller + klipp-pool) ligger i
+ * `kortlek.ts` och re-exporteras härifrån. Media pekas ut mot `public/`
+ * (cards/<valv>/<id>.png, clips/<klipp-id>.mp4); slottarna tål 404 och visar
+ * en platshållare tills filen finns.
  */
 
 export type Mode = 'pilot' | 'production'
@@ -22,6 +21,13 @@ export type Mode = 'pilot' | 'production'
  * (ingen ombyggnad), vilket vinner över bygg-värdet nedan. Se INSTALL-NUC.md.
  */
 const env = import.meta.env
+
+/** `?slow=N` gör alla väntetider i flödet N gånger längre (demo/granskning/skärmdumpar). */
+const SLOW = (() => {
+  if (typeof window === 'undefined') return 1
+  const n = Number(new URLSearchParams(window.location.search).get('slow'))
+  return Number.isFinite(n) && n > 0 ? n : 1
+})()
 
 /** 'production' om byggt med VITE_MODE=production, annars 'pilot' (default). */
 const ENV_MODE: Mode = env.VITE_MODE === 'production' ? 'production' : 'pilot'
@@ -55,8 +61,21 @@ export const config = {
    */
   pilotSync: 'solo' as 'solo' | 'sync',
 
-  /** Sekunder ett näringslivsklipp spelar (platshållare räknar ner). */
+  /** Sekunder ett saknat klipp "spelar" (platshållaren räknar ner). Riktiga
+   *  klipp spelar sin egen längd. */
   clipSeconds: 6,
+
+  /** Tider i flödet (ms). Allt som väntar på något ligger här. */
+  timing: {
+    /** Stämpeln ligger kvar på kortet innan nästa roll. */
+    stampHoldMs: 1400 * SLOW,
+    /** "1 dörr öppnades" ligger kvar innan nästa roll i verkligheten. */
+    revoteHoldMs: 2600 * SLOW,
+    /** Papperskort + "På riktigt:" visas innan klippet startar av sig självt. */
+    clipIntroMs: 2500 * SLOW,
+    /** PILOT/solo: så länge "skärm B" låtsas svepa klart efter skärm A. */
+    simOtherScreenMs: 2500 * SLOW,
+  },
 
   /**
    * RFID ja/nej-sömmen (SOM: `station<N>/rfidja` + `/rfidnej`, rå UID).
@@ -88,134 +107,18 @@ export const config = {
 /** Hela gruppen vid stationen (båda skärmarna). */
 export const FULL_GROUP = config.groupSize * config.screens
 
-/**
- * Bygger en url till en fil i public/ som funkar oavsett bas-sökväg
- * (`/` i dev/NUC, `/syvverktyget/` på ev. Pages). Filnamn med mellanslag
- * encode:as. Samma mönster som forhandlingen.
- */
-export function asset(path: string): string {
-  return encodeURI(import.meta.env.BASE_URL + path.replace(/^\/+/, ''))
-}
-
-export type ValvId = 'diplomatkaren' | 'driften' | 'forskningslaget' | 'teknologerna'
-
-export interface Valv {
-  id: ValvId
-  /** Visningsnamn. */
-  name: string
-  /** Kort beskrivning av arbetssättet. */
-  tagline: string
-  /** Valvets färg (overall/accent i kort-bilderna). CSS-färg. */
-  color: string
-}
-
-// Valvfärger = lag-overallens färg (låst 2026-10-12): Diplomatkåren GRÖN,
-// Driften GUL, Forskningslaget BLÅ, Teknologerna RÖD.
-export const VALV: Record<ValvId, Valv> = {
-  diplomatkaren: { id: 'diplomatkaren', name: 'Diplomatkåren', tagline: 'Möten, avtal, relationer', color: '#7ad14f' },
-  driften: { id: 'driften', name: 'Driften', tagline: 'Handfast, operativt, får igång', color: '#e8c020' },
-  forskningslaget: { id: 'forskningslaget', name: 'Forskningslaget', tagline: 'Undersöka, testa, ta reda på', color: '#4aa3ff' },
-  teknologerna: { id: 'teknologerna', name: 'Teknologerna', tagline: 'Konstruera, bygga, få att funka', color: '#ff5a3c' },
-}
-
-export interface Role {
-  id: string
-  /** Påhittat valv-yrke (kortets titel). */
-  title: string
-  /** Riktigt jobb bakom rollen. */
-  realJob: string
-  /** Kort blurb på kortet. */
-  blurb: string
-  /** Förproducerad kort-bild. Pekar mot public/cards/<valv>/<id>.png; tills
-   *  filen finns visar MediaSlot en platshållare (tål 404). null = alltid ph. */
-  image: string | null
-  /** Näringslivsklipp som speglar verkligheten. `id` delas i klipp-poolen
-   *  (flera roller kan peka på samma film); `src` mot public/clips/<id>.mp4. */
-  clip: { id: string; brief: string; src: string | null }
-}
-
-/** Kort-bild-url för en roll (konvention: public/cards/<valv>/<id>.png). */
-function cardImg(valv: ValvId, id: string): string {
-  return asset(`cards/${valv}/${id}.png`)
-}
-/** Klipp-url ur den delade poolen (konvention: public/clips/<clipId>.mp4). */
-function clipSrc(clipId: string): string {
-  return asset(`clips/${clipId}.mp4`)
-}
-
-/**
- * Kortleken per valv. Just nu bara DRIFTEN (låst 2026-10-12, 6 roller — yrkena
- * som driftas INNE i valvet). Övriga valv fylls på när rollistan spikats. Varje
- * person som sorterats till ett valv får exakt detta valvs lek.
- *
- * image/clip.src pekar mot de filnamn som ska droppas i public/ — layouten är
- * klar, så när filerna finns dyker de upp utan kodändring.
- */
-export const DECKS: Record<ValvId, Role[]> = {
-  driften: [
-    {
-      id: 'processoperatoren',
-      title: 'Processoperatören',
-      realJob: 'Processoperatör, stål-/verkstadsindustri',
-      blurb: 'Kör och vaktar en industriprocess dygnet runt — läser av, finjusterar, griper in när något larmar.',
-      image: cardImg('driften', 'processoperatoren'),
-      clip: { id: 'clip1', brief: 'Vox pop / silent process — en skiftgång i ett kontrollrum', src: clipSrc('clip1') },
-    },
-    {
-      id: 'faltteknikern',
-      title: 'Fältteknikern',
-      realJob: 'Underhålls- och servicetekniker',
-      blurb: 'Lagar det som gått sönder ute i fält — reser, löser, får igång. Ingen dag är den andra lik.',
-      image: cardImg('driften', 'faltteknikern'),
-      clip: { id: 'clip2', brief: 'Talking head — "en dag på vägen" med en servicetekniker', src: clipSrc('clip2') },
-    },
-    {
-      id: 'faltmedikern',
-      title: 'Fältmedikern',
-      realJob: 'Sjuksköterska / undersköterska',
-      blurb: 'Tar hand om människor när det gäller — snabba beslut, trygg hand, aldrig ensam i laget.',
-      image: cardImg('driften', 'faltmedikern'),
-      clip: { id: 'clip3', brief: 'Vox pop — vårdpersonal om "det ingen ser"', src: clipSrc('clip3') },
-    },
-    {
-      id: 'harbargesvarden',
-      title: 'Härbärgesvärden',
-      realJob: 'Kock / hotell- och restaurangpersonal',
-      blurb: 'Får ett rum fullt av gäster att må bra — tempo, timing och allt på plats samtidigt.',
-      image: cardImg('driften', 'harbargesvarden'),
-      clip: { id: 'clip4', brief: 'Silent process — ett kök under lunchrush', src: clipSrc('clip4') },
-    },
-    {
-      id: 'markforvaltaren',
-      title: 'Markförvaltaren',
-      realJob: 'Lantbrukare / djurskötare',
-      blurb: 'Odlar valvets mat i stora odlingstält — sköter grödor och system så basen är självförsörjande.',
-      image: cardImg('driften', 'markforvaltaren'),
-      clip: { id: 'clip1', brief: 'Talking head — morgon bland odlingarna', src: clipSrc('clip1') },
-    },
-    {
-      id: 'vattenmastaren',
-      title: 'Vattenmästaren',
-      realJob: 'VA-/processtekniker (vattenrening)',
-      blurb: 'Håller valvets vatten rent och i kretslopp — renar, återvinner, övervakar att inget går till spillo.',
-      image: cardImg('driften', 'vattenmastaren'),
-      clip: { id: 'clip2', brief: 'Silent process — vattenrening/återvinning', src: clipSrc('clip2') },
-    },
-  ],
-  diplomatkaren: [],
-  forskningslaget: [],
-  teknologerna: [],
-}
+export { VALV, VALV_IDS, DECKS, CLIPS, asset, clipSrc } from './kortlek'
+export type { ValvId, Valv, Role, Clip, ClipId } from './kortlek'
 
 /**
  * PILOT: vilket valv den här gruppen sorterats till (sätts uppströms i drift
- * via identitetssömmen, eller via `?valv=` i URL:en). Byt här för att testa en
- * annan lek.
+ * via `?valv=` eller kommando-kanalen).
  */
-export const PILOT_VALV: ValvId = 'driften'
+export const PILOT_VALV = 'driften' as const
 
 /** PILOT: namn på de 3 vid den här skärmen (kommer från RFID-incheckning i drift). */
 export const PILOT_MEMBERS = ['Spelare 1', 'Spelare 2', 'Spelare 3']
 
-/** Vilken skärm den här instansen är ('A' driver flödet i solo-pilot). */
-export const SCREEN_ID: 'A' | 'B' = 'A'
+/** Vilken skärm den här instansen är ('A' driver flödet i solo-pilot). `?screen=B` byter. */
+export const SCREEN_ID: 'A' | 'B' =
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('screen') === 'B' ? 'B' : 'A'

@@ -23,6 +23,18 @@
  *   summaryDown    h12 summary ▼ per roll
  *   summarySame    h13 summary → per roll
  *   avslutStinger  h14 slutet/avslut
+ *
+ * v2-händelser (SYV-ljudprinciperna i RIKTNING-OVERGANG-OCH-VERKTYG §(c)):
+ *   bip        EN neutral bip, likadan för öppen och stängd (ingen ska höra
+ *              vad grannen valde). Bara syntes: h4/h5 låter olika per sida.
+ *   doorOpen   kortet stämplas ÖPPEN: kort varm ton uppåt (h3, bygg vidare på).
+ *   doorClose  kortet stämplas STÄNGD: mjuk "dörren glider igen" (luft +
+ *              filter), ALDRIG ett fel-ljud. Bara syntes: h5 (centroid ~0,8 kHz,
+ *              högt och lågt = "fel"-karaktären) och h2 (svep-riktning) valdes bort.
+ *   doorGlide  en dörr öppnades i omröstningen: mjukt glid uppåt.
+ *
+ * Bädden: loopas från public/Sound/bed/syv-badd.mp3 om filen finns (ingen
+ * syntes-bädd). duckBed(true) tystnar den helt medan ett klipp spelar.
  */
 
 export type Sfx =
@@ -40,9 +52,14 @@ export type Sfx =
   | 'summaryDown'
   | 'summarySame'
   | 'avslutStinger'
+  | 'bip'
+  | 'doorOpen'
+  | 'doorClose'
+  | 'doorGlide'
 
 export const SAMPLES_ENABLED = true
-export const SAMPLE_FILES: Record<Sfx, string> = {
+/** null = bara syntes (medvetet, se ovan). */
+export const SAMPLE_FILES: Record<Sfx, string | null> = {
   attract: 'h1-attract-entre.mp3',
   swipeLeft: 'h2-swipe-vanster.mp3',
   swipeRight: 'h3-swipe-hoger.mp3',
@@ -57,7 +74,16 @@ export const SAMPLE_FILES: Record<Sfx, string> = {
   summaryDown: 'h12-summary-ner.mp3',
   summarySame: 'h13-summary-oforandrad.mp3',
   avslutStinger: 'h14-avslut-stinger.mp3',
+  bip: null,
+  doorOpen: 'h3-swipe-hoger.mp3',
+  doorClose: null,
+  doorGlide: null,
 }
+
+/** Bädden (valfri fil). Saknas den är det tyst under flödet. */
+export const BED_FILE = 'Sound/bed/syv-badd.mp3'
+/** Bäddens nivå relativt master (ca −18 dB). */
+const BED_LEVEL = 0.13
 
 class AudioEngine {
   private ctx: AudioContext | null = null
@@ -66,6 +92,10 @@ class AudioEngine {
   private _volume = 0.6
   private unlocked = false
   private buffers = new Map<Sfx, AudioBuffer>()
+  private bedGain: GainNode | null = null
+  private bedWanted = false
+  private bedDucked = false
+  private bedStarted = false
 
   get muted(): boolean {
     return this._muted
@@ -115,7 +145,8 @@ class AudioEngine {
     if (!ctx) return
     const base = import.meta.env.BASE_URL
     await Promise.all(
-      (Object.entries(SAMPLE_FILES) as [Sfx, string][]).map(async ([sfx, file]) => {
+      (Object.entries(SAMPLE_FILES) as [Sfx, string | null][]).map(async ([sfx, file]) => {
+        if (!file) return
         try {
           const res = await fetch(`${base}Sound/sfx/${file}`)
           if (!res.ok) return
@@ -126,6 +157,75 @@ class AudioEngine {
         }
       }),
     )
+  }
+
+  /** Starta bädden (loop) om filen finns. Anropas efter unlock. */
+  startBed(): void {
+    this.bedWanted = true
+    void this.loadBed()
+  }
+
+  private async loadBed(): Promise<void> {
+    const ctx = this.ctx
+    if (!ctx || !this.master || this.bedStarted) return
+    this.bedStarted = true
+    try {
+      const res = await fetch(import.meta.env.BASE_URL + BED_FILE)
+      if (!res.ok || !(res.headers.get('content-type') ?? '').includes('audio')) return
+      const buf = await ctx.decodeAudioData(await res.arrayBuffer())
+      const src = ctx.createBufferSource()
+      src.buffer = buf
+      src.loop = true
+      this.bedGain = ctx.createGain()
+      this.bedGain.gain.value = this.bedWanted && !this.bedDucked ? BED_LEVEL : 0
+      src.connect(this.bedGain)
+      this.bedGain.connect(this.master)
+      src.start()
+    } catch {
+      /* ingen bädd → tyst */
+    }
+  }
+
+  /** Tysta bädden helt (klippet spelar) eller ta tillbaka den. */
+  duckBed(duck: boolean): void {
+    this.bedDucked = duck
+    if (!this.bedGain || !this.ctx) return
+    const g = this.bedGain.gain
+    const now = this.ctx.currentTime
+    g.cancelScheduledValues(now)
+    g.setValueAtTime(g.value, now)
+    g.linearRampToValueAtTime(duck ? 0 : BED_LEVEL, now + (duck ? 0.6 : 1.5))
+  }
+
+  /** För felsökning: är bädden duckad just nu? */
+  get bedIsDucked(): boolean {
+    return this.bedDucked
+  }
+
+  /** Mjukt brus genom ett filter som sveper (luft, "dörren glider"). */
+  private air(fromHz: number, toHz: number, start: number, dur: number, peak: number): void {
+    if (!this.ctx || !this.master) return
+    const ctx = this.ctx
+    const len = Math.ceil(ctx.sampleRate * (dur + 0.05))
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate)
+    const data = buf.getChannelData(0)
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.Q.value = 1.2
+    filter.frequency.setValueAtTime(fromHz, start)
+    filter.frequency.exponentialRampToValueAtTime(toHz, start + dur)
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0.0001, start)
+    gain.gain.exponentialRampToValueAtTime(peak, start + dur * 0.35)
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + dur)
+    src.connect(filter)
+    filter.connect(gain)
+    gain.connect(this.master)
+    src.start(start)
+    src.stop(start + dur + 0.05)
   }
 
   private playBuffer(sfx: Sfx): boolean {
@@ -217,6 +317,23 @@ class AudioEngine {
         break
       case 'summarySame':
         this.tone(587, now, 0.12, 'triangle', 0.12)
+        break
+      case 'bip':
+        // Neutral, kort och tyst. Samma för båda sidorna.
+        this.tone(1175, now, 0.07, 'sine', 0.09)
+        break
+      case 'doorOpen':
+        this.tone(523, now, 0.12, 'triangle', 0.14)
+        this.tone(784, now + 0.1, 0.22, 'triangle', 0.16)
+        break
+      case 'doorClose':
+        // Luft som glider ihop + en mjuk, kort "klick" i mellanregistret. Inget lågt brum.
+        this.air(1800, 500, now, 0.45, 0.08)
+        this.tone(392, now + 0.38, 0.12, 'sine', 0.05)
+        break
+      case 'doorGlide':
+        this.sweep(440, 880, now, 0.5, 'sine', 0.1)
+        this.tone(1047, now + 0.45, 0.25, 'triangle', 0.1)
         break
       case 'avslutStinger':
         this.tone(523, now, 0.12, 'triangle', 0.2)
