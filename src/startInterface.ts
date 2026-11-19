@@ -14,9 +14,8 @@
  *       … { cmd:'reset' }
  *     Finns även på window.__syv för enkel scripting.
  *
- * En dedikerad `station<N>/start`-MQTT-topic är AVSIKTLIGT inte spikad här —
- * den tas i SOM.md när regi-kontraktet landar (öppen fråga). Tills dess räcker
- * url + kanal för pilot och drift.
+ *  3. MQTT (regi, SOM.md): `syv/start` → börja; `syv/done` när dörrarna visats —
+ *     se adapters/regiSom.ts. `?session=` sätter körningen för done-meddelandet.
  */
 import type { useStore } from './store'
 import type { ValvId } from './config'

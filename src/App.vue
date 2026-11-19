@@ -12,7 +12,8 @@
  */
 import { computed, onBeforeUnmount, onMounted, provide, watch } from 'vue'
 import { useStore, type Vote } from '@/store'
-import { createRfid } from '@/adapters'
+import { createRfid, brokerUrl } from '@/adapters'
+import { connectRegi } from '@/adapters/regiSom'
 import { applyStartInterface } from '@/startInterface'
 import { audio } from '@/audio/AudioEngine'
 import CrtScreen from '@/components/CrtScreen.vue'
@@ -51,10 +52,12 @@ function onKey(e: KeyboardEvent): void {
 }
 
 let stopStart: (() => void) | null = null
+let stopRegi: (() => void) | null = null
 let unsub: (() => void) | null = null
 
 onMounted(() => {
   stopStart = applyStartInterface(store)
+  stopRegi = connectRegi(store, brokerUrl()) // syv/start → börja, dörrarna → syv/done (SOM.md)
   unsub = rfid.onBip((bip) => input(bip.side, bip.uid))
   window.addEventListener('keydown', onKey)
   window.addEventListener('pointerdown', unlockAudio)
@@ -64,6 +67,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   unsub?.()
   stopStart?.()
+  stopRegi?.()
   rfid.close()
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('pointerdown', unlockAudio)

@@ -21,7 +21,7 @@ class NullRfidReaders implements RfidReaders {
 }
 
 /** Broker-url: `?broker=` i URL > drift-config > pilot-config. */
-function brokerUrl(): string {
+export function brokerUrl(): string {
   if (typeof window !== 'undefined') {
     const q = new URLSearchParams(window.location.search).get('broker')
     if (q) return q
