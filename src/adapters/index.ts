@@ -33,7 +33,8 @@ function brokerUrl(): string {
 }
 
 export function createRfid(): RfidReaders {
-  if (!config.rfid.enabled) return new NullRfidReaders()
+  // Bandlöst läge (v49): inga läsare — personerna sveper i turordning på skärmen.
+  if (!config.rfid.enabled || config.bandlost) return new NullRfidReaders()
   return new MqttRfidReaders(brokerUrl(), config.stationN)
 }
 

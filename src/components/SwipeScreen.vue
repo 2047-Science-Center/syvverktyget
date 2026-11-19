@@ -5,18 +5,20 @@
  * stämplar kortet. Det riktiga yrket syns aldrig här.
  */
 import { computed } from 'vue'
-import { config } from '@/config'
 import { useStore, type Vote } from '@/store'
 import TopBar from './TopBar.vue'
 import DoorZone from './DoorZone.vue'
 import DoorIcon from './DoorIcon.vue'
 import CardPhoto from './CardPhoto.vue'
 import VotePips from './VotePips.vue'
+import TurnBanner from './TurnBanner.vue'
+import { useSwipeGesture } from '@/swipe'
 
 const store = useStore()
 const emit = defineEmits<{ cast: [Vote] }>()
 const role = computed(() => store.swipeCard!)
 const locked = computed(() => store.swipeStamp !== null)
+const swipe = useSwipeGesture((v) => emit('cast', v), () => !locked.value)
 </script>
 
 <template>
@@ -24,7 +26,13 @@ const locked = computed(() => store.swipeStamp !== null)
     <TopBar>ROLL {{ store.swipeIndex + 1 }} / {{ store.deck.length }}</TopBar>
     <div class="swipe">
       <DoorZone side="nej" :disabled="locked" @cast="emit('cast', $event)" />
-      <div class="swipe__center">
+      <div
+        class="swipe__center"
+        @pointerdown="swipe.onPointerdown"
+        @pointerup="swipe.onPointerup"
+        @pointercancel="swipe.onPointercancel"
+        @dragstart.prevent
+      >
         <div :key="role.id" class="paper card enter-up" style="--tilt: -0.6deg">
           <span class="tape tape--l" /><span class="tape tape--r" />
           <div class="card__head"><span>Valvet · {{ store.valv.name }}</span><span>roll</span></div>
@@ -39,8 +47,9 @@ const locked = computed(() => store.swipeStamp !== null)
       </div>
       <DoorZone side="ja" :disabled="locked" @cast="emit('cast', $event)" />
     </div>
+    <TurnBanner :locked="locked" />
     <p class="crt-q">Kan du tänka dig det här?</p>
-    <VotePips :count="store.swipePending.length" :size="config.groupSize" label="har bippat" />
+    <VotePips :count="store.swipePending.length" :size="store.voterCount" :label="store.bandlost ? 'har svept' : 'har bippat'" />
   </div>
 </template>
 
@@ -55,6 +64,7 @@ const locked = computed(() => store.swipeStamp !== null)
 }
 .swipe__center {
   min-height: 0;
+  touch-action: pan-y;
   display: flex;
   align-items: center;
   justify-content: center;
