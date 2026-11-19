@@ -5,11 +5,20 @@
  * vid röst: ingen ska kunna se vad grannen valde (prickarna visar bara att).
  */
 import DoorIcon from './DoorIcon.vue'
+import { config } from '@/config'
 import type { Vote } from '@/store'
 
 const props = defineProps<{ side: Vote; disabled?: boolean }>()
 const emit = defineEmits<{ cast: [Vote] }>()
 const open = props.side === 'ja'
+/** Bandlöst läge (v49): ingen läsare — tryck på zonen eller svep kortet åt det hållet. */
+const hint = config.bandlost
+  ? open
+    ? 'TRYCK · SVEP ▶'
+    : '◀ SVEP · TRYCK'
+  : open
+    ? 'HÖGER LÄSARE ▶'
+    : '◀ VÄNSTER LÄSARE'
 </script>
 
 <template>
@@ -18,12 +27,12 @@ const open = props.side === 'ja'
     class="zone"
     :class="open ? 'zone--open' : 'zone--closed'"
     :disabled="disabled"
-    :aria-label="open ? 'Öppen dörr (höger läsare)' : 'Stängd dörr (vänster läsare)'"
+    :aria-label="open ? 'Öppen dörr (höger)' : 'Stängd dörr (vänster)'"
     @click="emit('cast', side)"
   >
     <DoorIcon :open="open" :size="3.2" />
     <strong class="zone__word">{{ open ? 'ÖPPEN' : 'STÄNGD' }}</strong>
-    <span class="zone__hint mono">{{ open ? 'HÖGER LÄSARE ▶' : '◀ VÄNSTER LÄSARE' }}</span>
+    <span class="zone__hint mono">{{ hint }}</span>
   </button>
 </template>
 

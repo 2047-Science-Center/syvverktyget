@@ -11,6 +11,8 @@
  * en platshållare tills filen finns.
  */
 
+import { BANDLOST, stationFranUrl } from './bandlost'
+
 export type Mode = 'pilot' | 'production'
 
 /**
@@ -35,9 +37,9 @@ const ENV_MODE: Mode = env.VITE_MODE === 'production' ? 'production' : 'pilot'
 /** Stationens nummer i riggen. Topic-namespace blir `station<N>/…`. Sätts via
  *  VITE_STATION_N i drift. ANTA ALDRIG ett faktiskt legacy-nummer — bekräfta
  *  mot riggen innan skarp koppling. */
-export const STATION_N = Number.isFinite(Number(env.VITE_STATION_N))
-  ? Number(env.VITE_STATION_N)
-  : 0
+export const STATION_N = stationFranUrl(
+  Number.isFinite(Number(env.VITE_STATION_N)) ? Number(env.VITE_STATION_N) : 0,
+)
 
 export const config = {
   /** 'pilot' = SOLO + mock-identitet/resultat, RFID mockas via mosquitto_pub.
@@ -45,6 +47,10 @@ export const config = {
   mode: ENV_MODE,
 
   stationN: STATION_N,
+
+  /** Bandlöst läge (v49, src/bandlost.ts): svep i turordning på skärmen i stället för läsarna.
+   *  ?bandlost=1|0 / VITE_BANDLOST=1|0. Default på. */
+  bandlost: BANDLOST,
 
   /** Personer per skärm (en 3-grupp bippar vid en skärm). */
   groupSize: 3,

@@ -235,3 +235,18 @@ Val jag gjorde själv under bygget 2026-11-16 (Josef var borta). Säg till om n�
 - **Identitets-/resultat-söm** (`station<N>/identity`, `/result`) — när regi-kontraktet landar.
 - Övergångsfilmen (HyperFrames) och utskriften av det fysiska kortet.
 - Inga nya MQTT-topics.
+
+## Bandlöst läge (v49)
+
+Läsarna hinner inte bli klara till v49, så SYV kör som default **utan band**: personerna vid skärmen
+sveper i **tur och ordning** ("TUR 1 AV 3 · ALMA"). Tryck på dörrzonen eller svep kortet åt höger
+(ÖPPEN) eller vänster (STÄNGD). Kortet stämplas när alla vid skärmen röstat (majoritet som förut),
+och rösten sparas per person (`person:1..n`, samma person på alla kort).
+
+| Parameter | Betydelse |
+|---|---|
+| `?bandlost=1\|0` / `VITE_BANDLOST=1\|0` | På (default) = turordning på skärmen. Av = läsarna `station<N>/rfidja\|rfidnej` som förut. |
+| `?members=Alma,Noah,Wilma` | Namnen i turordningen. Antalet styr hur många röster som avgör kortet. Utan = "TUR 1 AV 3" (`groupSize`). |
+| `?station=N` | Läsar-topics `station<N>/…` (går före `VITE_STATION_N`). Overlayen på broker-NUC:en bör skicka med den. |
+
+Design: `../xy-arkitektur/XY-BANDLOST-OCH-ANKOMST.md`. Kontrakt: `../xy-rigg/SOM.md` ("bandlöst läge (v49)").

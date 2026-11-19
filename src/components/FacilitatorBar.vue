@@ -31,7 +31,7 @@ const phaseLabel: Record<string, string> = {
     <span class="fac__phase">{{ phaseLabel[store.phase] }}<template v-if="store.phase === 'reality'"> · {{ store.realityStep === 'clip' ? 'klipp' : 'rösta om' }}</template></span>
     <span>{{ store.valv.name }}</span>
     <span class="fac__rfid" :class="{ 'is-live': rfidConnected }">
-      <span class="fac__led" />RFID {{ rfidConnected ? 'LIVE' : 'klick' }}
+      <span class="fac__led" />{{ config.bandlost ? 'BANDLÖST · turordning' : `RFID ${rfidConnected ? 'LIVE' : 'klick'}` }}
     </span>
     <button class="fac__btn" :aria-pressed="muted" :title="muted ? 'Ljud av' : 'Ljud på'" @click="toggleMute">
       {{ muted ? '🔇' : '🔊' }}

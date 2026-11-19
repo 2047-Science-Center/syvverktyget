@@ -16,11 +16,16 @@
  *
  * PILOT/solo: ett fönster driver flödet; den andra skärmens 3 röster simuleras
  * deterministiskt. Skarp två-NUC-synk byggs senare (config.pilotSync).
+ *
+ * BANDLÖST (config.bandlost, v49): ingen läsare — personerna vid skärmen sveper i TUR OCH ORDNING.
+ * `turn` = vems tur (0-baserad), `voterCount` = antal vid skärmen (namnen ur ?members=, annars
+ * groupSize). Rösten sparas som person:<n>, samma person på alla kort (som ett UID).
  */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
 import { config, DECKS, VALV, FULL_GROUP, PILOT_VALV, PILOT_MEMBERS, type Role, type ValvId } from './config'
+import { turVoterId } from './bandlost'
 
 export type Phase = 'card' | 'swipe' | 'overview' | 'reality' | 'doors'
 export type RealityStep = 'clip' | 'revote'
@@ -69,6 +74,13 @@ export const useStore = defineStore('syvverktyget', () => {
   const phase = ref<Phase>('card')
   const valvId = ref<ValvId>(PILOT_VALV)
   const members = ref<string[]>([...PILOT_MEMBERS])
+  /** true när regi/overlayen skickat riktiga namn (?members= / start-kanalen). */
+  const namedMembers = ref(false)
+  const bandlost = config.bandlost
+  /** Antal röster som avgör ett kort vid den här skärmen. */
+  const voterCount = computed(() =>
+    bandlost && namedMembers.value ? Math.max(1, members.value.length) : config.groupSize,
+  )
 
   const deck = computed<Role[]>(() => DECKS[valvId.value])
   const valv = computed(() => VALV[valvId.value])
@@ -108,11 +120,20 @@ export const useStore = defineStore('syvverktyget', () => {
     return `local:${cardId}:${list.length + 1}`
   }
 
+  /** Vems tur det är (bandlöst läge): nästa röst på kortet som är öppet nu. */
+  const turn = computed(() => {
+    if (phase.value === 'swipe') return swipePending.value.length
+    if (phase.value === 'reality' && realityStep.value === 'revote') return revotePending.value.length
+    return 0
+  })
+  /** Namnet på den som har turen, om namnen är kända (annars null → "TUR 2 AV 3"). */
+  const turnName = computed(() => (namedMembers.value ? (members.value[turn.value] ?? null) : null))
+
   /** Lägg/uppdatera en ballot. Samma UID igen före upplösning = ändrat sig. */
   function applyBallot(list: Ballot[], voterId: string | undefined, vote: Vote, cardId: string): Ballot[] | null {
-    const id = voterId ? `uid:${voterId}` : localVoterId(cardId, list)
+    const id = voterId ? `uid:${voterId}` : bandlost ? turVoterId(list.length) : localVoterId(cardId, list)
     if (list.some((b) => b.voterId === id)) return list.map((b) => (b.voterId === id ? { ...b, vote } : b))
-    if (list.length >= config.groupSize) return null
+    if (list.length >= voterCount.value) return null
     return [...list, { voterId: id, vote }]
   }
 
@@ -131,7 +152,7 @@ export const useStore = defineStore('syvverktyget', () => {
     const next = applyBallot(swipePending.value, voterId, vote, card.id)
     if (!next) return false
     swipePending.value = next
-    if (next.length >= config.groupSize) resolveSwipe(card)
+    if (next.length >= voterCount.value) resolveSwipe(card)
     return true
   }
 
@@ -177,7 +198,7 @@ export const useStore = defineStore('syvverktyget', () => {
     const next = applyBallot(revotePending.value, voterId, vote, card.id)
     if (!next) return false
     revotePending.value = next
-    if (next.length >= config.groupSize) resolveRevote(card)
+    if (next.length >= voterCount.value) resolveRevote(card)
     return true
   }
 
@@ -270,7 +291,9 @@ export const useStore = defineStore('syvverktyget', () => {
     valvId.value = id
   }
   function setMembers(names: string[]): void {
-    if (names.length) members.value = names
+    if (!names.length) return
+    members.value = names
+    namedMembers.value = true
   }
 
   function clearTimers(): void {
@@ -299,6 +322,11 @@ export const useStore = defineStore('syvverktyget', () => {
     valv,
     members,
     deck,
+    // bandlöst: turordning
+    bandlost,
+    voterCount,
+    turn,
+    turnName,
     // svep
     swipeIndex,
     swipeCard,

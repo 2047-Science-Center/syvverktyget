@@ -15,6 +15,8 @@ import DoorStrip from './DoorStrip.vue'
 import CardPhoto from './CardPhoto.vue'
 import PhoneClip from './PhoneClip.vue'
 import VotePips from './VotePips.vue'
+import TurnBanner from './TurnBanner.vue'
+import { useSwipeGesture } from '@/swipe'
 
 const store = useStore()
 const emit = defineEmits<{ cast: [Vote] }>()
@@ -54,6 +56,7 @@ const movedText = computed(() => {
   return 'Alla står kvar. Det är också ett svar.'
 })
 const locked = computed(() => store.revoteMoved !== null)
+const swipe = useSwipeGesture((v) => emit('cast', v), () => !locked.value)
 </script>
 
 <template>
@@ -93,7 +96,13 @@ const locked = computed(() => store.revoteMoved !== null)
     <template v-else>
       <div class="revote">
         <DoorZone side="nej" :disabled="locked" @cast="emit('cast', $event)" />
-        <div class="revote__center">
+        <div
+          class="revote__center"
+          @pointerdown="swipe.onPointerdown"
+          @pointerup="swipe.onPointerup"
+          @pointercancel="swipe.onPointercancel"
+          @dragstart.prevent
+        >
           <div class="paper mini-card enter-up" style="--tilt: -0.8deg">
             <span class="tape tape--r" />
             <div class="mini-card__thumb"><CardPhoto :src="role.image" :title="role.title" compact /></div>
@@ -116,7 +125,12 @@ const locked = computed(() => store.revoteMoved !== null)
         </div>
         <DoorZone side="ja" :disabled="locked" @cast="emit('cast', $event)" />
       </div>
-      <VotePips :count="store.revotePending.length" :size="config.groupSize" label="har bippat igen" />
+      <TurnBanner :locked="locked" />
+      <VotePips
+        :count="store.revotePending.length"
+        :size="store.voterCount"
+        :label="store.bandlost ? 'har svept igen' : 'har bippat igen'"
+      />
     </template>
   </div>
 </template>
