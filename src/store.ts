@@ -79,8 +79,11 @@ export const useStore = defineStore('syvverktyget', () => {
   const bandlost = config.bandlost
   /** Antal röster som avgör ett kort vid den här skärmen. */
   const voterCount = computed(() =>
-    bandlost && namedMembers.value ? Math.max(1, members.value.length) : config.groupSize,
+    namedMembers.value && (bandlost || lagFranRegi.value) ? Math.max(1, members.value.length) : config.groupSize,
   )
+  /** Valvlaget vid den här skärmen ur regi (syv/lag). band_id → namn, för band-läget (UID → namn). */
+  const lagFranRegi = ref(false)
+  const bandNamn = ref<Record<string, string>>({})
 
   const deck = computed<Role[]>(() => DECKS[valvId.value])
   const valv = computed(() => VALV[valvId.value])
@@ -128,6 +131,16 @@ export const useStore = defineStore('syvverktyget', () => {
   })
   /** Namnet på den som har turen, om namnen är kända (annars null → "TUR 2 AV 3"). */
   const turnName = computed(() => (namedMembers.value ? (members.value[turn.value] ?? null) : null))
+  /** Rösterna på kortet som är öppet nu (för namnraden: vem har röstat, aldrig vad). */
+  const openBallots = computed<Ballot[]>(() => {
+    if (phase.value === 'swipe') return swipePending.value
+    if (phase.value === 'reality' && realityStep.value === 'revote') return revotePending.value
+    return []
+  })
+  /** Band-läget: namnen på dem som bippat på kortet (okänt band → null). */
+  const votedNames = computed(() =>
+    openBallots.value.map((b) => (b.voterId.startsWith('uid:') ? (bandNamn.value[b.voterId.slice(4)] ?? null) : null)),
+  )
 
   /** Lägg/uppdatera en ballot. Samma UID igen före upplösning = ändrat sig. */
   function applyBallot(list: Ballot[], voterId: string | undefined, vote: Vote, cardId: string): Ballot[] | null {
@@ -295,6 +308,28 @@ export const useStore = defineStore('syvverktyget', () => {
     members.value = names
     namedMembers.value = true
   }
+  /** Inget röstat än i den här rundan → säkert att byta antal röstare. */
+  const ingetRostat = computed(
+    () => Object.keys(swipeVotes.value).length === 0 && swipePending.value.length === 0,
+  )
+  /**
+   * Valvlaget vid skärmen ur regi (syv/lag). Namnen blir turordningen (bandlöst) och UID → namn (band).
+   * Antalet ändras bara innan någon röstat, så att en sen uppdatering aldrig kan välta ett kort.
+   */
+  function setLag(lag: { band_id: string; name?: string | null }[]): void {
+    if (!lag.length) return
+    const namn: Record<string, string> = {}
+    lag.forEach((p, i) => {
+      namn[String(p.band_id).toUpperCase()] = p.name?.trim() || `Person ${i + 1}`
+    })
+    bandNamn.value = namn
+    const names = lag.map((p, i) => p.name?.trim() || `Person ${i + 1}`)
+    if (ingetRostat.value || names.length === members.value.length) {
+      members.value = names
+      namedMembers.value = true
+      lagFranRegi.value = true
+    }
+  }
 
   function clearTimers(): void {
     for (const t of timers) clearTimeout(t)
@@ -327,6 +362,8 @@ export const useStore = defineStore('syvverktyget', () => {
     voterCount,
     turn,
     turnName,
+    namedMembers,
+    votedNames,
     // svep
     swipeIndex,
     swipeCard,
@@ -357,6 +394,7 @@ export const useStore = defineStore('syvverktyget', () => {
     // start-gränssnitt
     setValv,
     setMembers,
+    setLag,
     reset,
     FULL_GROUP,
   }

@@ -3,6 +3,7 @@
  *
  *   syv/start  regi → SYV   {session_id}               → börja (om vi står på startkortet)
  *   syv/done   SYV → regi   {session_id, valv, screen} → när dörrarna visats (bara skärm A per valv)
+ *   syv/lag    regi → SYV   {session_id, valv:{<id>:[{band_id,name}]}} (retained) → namnen vid skärmen
  *
  * Regi väntar in `done` från alla valv innan den går vidare (config syv.valv_antal).
  * Aktiv i drift (VITE_MODE=production) eller när kiosken/overlayen anger `?broker=`.
@@ -13,6 +14,23 @@ import { config, SCREEN_ID } from '@/config'
 import type { useStore } from '@/store'
 
 type Store = ReturnType<typeof useStore>
+
+type LagPerson = { band_id: string; name?: string | null }
+
+/**
+ * Valvets lista (domslutens ordning) → de som står vid den här skärmen.
+ * Första halvan = A, resten = B. `?skarmar=1` = alla på A (station med en SYV-skärm).
+ */
+export function skarmensLag(lista: LagPerson[], screen: 'A' | 'B', skarmar: number): LagPerson[] {
+  if (skarmar <= 1) return screen === 'A' ? lista : []
+  const halva = Math.ceil(lista.length / 2)
+  return screen === 'A' ? lista.slice(0, halva) : lista.slice(halva)
+}
+
+function antalSkarmar(): number {
+  const q = Number(new URLSearchParams(window.location.search).get('skarmar'))
+  return Number.isInteger(q) && q >= 1 ? q : config.screens
+}
 
 type MqttLike = {
   on(event: string, cb: (...args: unknown[]) => void): void
@@ -51,8 +69,25 @@ export function connectRegi(store: Store, brokerUrl: string): () => void {
         connectTimeout: 4000,
         clientId: `syv-${store.valvId}-${SCREEN_ID}-${Math.random().toString(16).slice(2, 8)}`,
       }) as unknown as MqttLike
-      client.on('connect', () => client?.subscribe('syv/start'))
+      client.on('connect', () => {
+        client?.subscribe('syv/start')
+        client?.subscribe('syv/lag')
+      })
       client.on('message', (topic: unknown, payload: unknown) => {
+        if (topic === 'syv/lag') {
+          try {
+            const d = JSON.parse(String(payload) || '{}') as {
+              session_id?: string | number | null
+              valv?: Record<string, LagPerson[]>
+            }
+            if (session != null && d.session_id != null && String(d.session_id) !== String(session)) return
+            const lista = d.valv?.[store.valvId] ?? []
+            store.setLag(skarmensLag(lista, SCREEN_ID, antalSkarmar()))
+          } catch {
+            /* tom (rensad) eller trasig payload → behåll det vi har */
+          }
+          return
+        }
         if (topic !== 'syv/start') return
         try {
           const d = JSON.parse(String(payload) || '{}') as { session_id?: string | number | null }

@@ -247,6 +247,13 @@ och rösten sparas per person (`person:1..n`, samma person på alla kort).
 |---|---|
 | `?bandlost=1\|0` / `VITE_BANDLOST=1\|0` | På (default) = turordning på skärmen. Av = läsarna `station<N>/rfidja\|rfidnej` som förut. |
 | `?members=Alma,Noah,Wilma` | Namnen i turordningen. Antalet styr hur många röster som avgör kortet. Utan = "TUR 1 AV 3" (`groupSize`). |
-| `?station=N` | Läsar-topics `station<N>/…` (går före `VITE_STATION_N`). Overlayen på broker-NUC:en bör skicka med den. |
+| `?station=N` | Läsar-topics `station<N>/…` (går före `VITE_STATION_N`). Overlayen skickar den (station-kit `film`, SOM.md 2026-11-19). |
+| `?skarmar=1` | Stationen har bara en SYV-skärm: hela valvlaget på skärm A. Default 2 (första halvan A, resten B). |
+
+**Namnen vid skärmen (`syv/lag`, retained, SOM.md 2026-11-19):** regi publicerar vilka som sorterats till vilket
+valv (ur `sortering/dom` + deltagarlistan). SYV tar sitt valvs lista, delar den per skärm och visar
+**"ALMA · DIN TUR ATT VÄLJA"** med raden av namn (✓ = har valt, aldrig vad). Turen går vidare av sig själv. I
+band-läget visas namnen på dem som bippat (UID → namn). **Inget sparas per person**, och namnen finns bara på
+skärmen medan rundan pågår. Antalet röstare byts bara innan någon röstat.
 
 Design: `../xy-arkitektur/XY-BANDLOST-OCH-ANKOMST.md`. Kontrakt: `../xy-rigg/SOM.md` ("bandlöst läge (v49)").
